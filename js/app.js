@@ -31,6 +31,19 @@ window.addEventListener('DOMContentLoaded', () => {
     safeGet('globalSearch')?.addEventListener('input', renderRoster);
     safeGet('deptFilter')?.addEventListener('change', renderRoster);
     safeGet('statusFilter')?.addEventListener('change', renderRoster);
+
+    if (typeof bindDrawerEvents === 'function') {
+        bindDrawerEvents();
+    }
+
+    const backdrop = safeGet('drawerBackdrop');
+    if (backdrop) {
+        backdrop.addEventListener('click', () => {
+            if (typeof closeDrawer === 'function') {
+                closeDrawer();
+            }
+        });
+    }
 });
 
 let EMPLOYEES = [];
@@ -120,6 +133,7 @@ function openNewEmployeeForm() {
     const drawer = safeGet('employeeDrawer');
     if (backdrop) backdrop.classList.add('open');
     if (drawer) drawer.classList.add('open');
+    applyRolePermissions();
 }
 
 async function runDeleteEmployee() {
@@ -707,8 +721,13 @@ function renderRoster() {
 
     document.querySelectorAll('[data-view-id]').forEach(btn => {
         btn.addEventListener('click', () => {
-            const employee = EMPLOYEES.find(e => String(e.id) === String(btn.dataset.viewId));
-            if (employee) openDrawer(employee);
+            const employee = EMPLOYEES.find(e =>
+                String(e.id) === String(btn.dataset.viewId) ||
+                String(e.dbId) === String(btn.dataset.viewId)
+            );
+            if (employee && typeof openDrawer === 'function') {
+                openDrawer(employee);
+            }
         });
     });
 }
@@ -1354,8 +1373,13 @@ async function loadReviewDashboard() {
         bodyTarget.querySelectorAll('[data-review-employee-id]').forEach(el => {
             el.addEventListener('click', (event) => {
                 event.stopPropagation();
-                const employee = EMPLOYEES.find(e => String(e.id) === String(el.dataset.reviewEmployeeId));
-                if (employee) openDrawer(employee);
+                const employee = EMPLOYEES.find(e =>
+                    String(e.id) === String(el.dataset.reviewEmployeeId) ||
+                    String(e.dbId) === String(el.dataset.reviewEmployeeId)
+                );
+                if (employee && typeof openDrawer === 'function') {
+                    openDrawer(employee);
+                }
             });
         });
     } catch (err) {
@@ -1580,8 +1604,13 @@ async function loadRiskEmployees() {
 
         target.querySelectorAll('[data-risk-employee-id]').forEach(card => {
             card.addEventListener('click', () => {
-                const employee = EMPLOYEES.find(e => String(e.id) === String(card.dataset.riskEmployeeId));
-                if (employee) openDrawer(employee);
+                const employee = EMPLOYEES.find(e =>
+                    String(e.id) === String(card.dataset.riskEmployeeId) ||
+                    String(e.dbId) === String(card.dataset.riskEmployeeId)
+                );
+                if (employee && typeof openDrawer === 'function') {
+                    openDrawer(employee);
+                }
             });
         });
     } catch (err) {
@@ -1963,7 +1992,7 @@ async function markImpactPlayer() {
     showToast('Employee marked as an Impact Player.');
     updateEmployeeRowBadges(currentEmployee.id);
     recordAuditEvent('Marked Impact Player', currentEmployee, reason);
-    
+
     setManualImpactPlayerUi(true, reason);
     if (typeof loadEmployeeNotes === 'function') await loadEmployeeNotes(currentEmployee.id);
     if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
@@ -2104,6 +2133,19 @@ async function deleteEmployeeRecord() {
     const confirmed = window.confirm(`Delete employee ${currentEmployee.first} ${currentEmployee.last}? This cannot be undone.`);
     if (!confirmed) return;
 
+    const employeeKey = String(currentEmployee.id || currentEmployee.dbId || '');
+
+    const { error: onboardingDeleteError } = await supabaseClient
+        .from('onboarding_checklist_items')
+        .delete()
+        .eq('employee_id', employeeKey);
+
+    if (onboardingDeleteError) {
+        console.error(onboardingDeleteError);
+        showToast('Could not remove onboarding items for this employee.', 'error');
+        return;
+    }
+
     const { data, error } = await deleteEmployeeById(String(currentEmployee.dbId || currentEmployee.id));
 
     if (error) {
@@ -2120,23 +2162,6 @@ async function deleteEmployeeRecord() {
     await loadRecentActivity();
     await loadReviewDashboard();
 }
-
-
-
-
-
-function closeDrawer() {
-    currentEmployee = null;
-    applyRolePermissions();
-    safeGet('drawerBackdrop')?.classList.remove('open');
-    safeGet('employeeDrawer')?.classList.remove('open');
-}
-
-
-
-
-
-
 
 
 
@@ -2416,6 +2441,7 @@ async function uploadEmployeeDocument() {
     safeGet('docFile').value = '';
     await loadEmployeeDocuments(currentEmployee.id);
 }
+
 async function loadEmployeeDocuments(employeeId) {
     const target = safeGet('docHistory');
     if (!target) return;
@@ -2472,62 +2498,204 @@ async function loadEmployeeDocuments(employeeId) {
         });
     });
 }
+async function loadEmployeeOnboarding(employeeId) {
 
-async function deleteEmergencyContact() {
-    if (!currentEmergencyContactId) {
-        showToast('No emergency contact to delete.', 'error');
-        return;
-    }
+    const target = safeGet('onboardingChecklist');
+    const summary = safeGet('onboardingSummary');
+    const bar = safeGet('onboardingProgressBar');
+    if (!target) return;
 
-    if (!confirm('Are you sure you want to delete this emergency contact?')) {
-        return;
-    }
+    target.innerHTML = '<div class="empty">Loading onboarding...</div>';
 
     try {
-        const resolvedEmployeeId = currentEmployee?.dbId || currentEmployee?.id || null;
-        const deletingId = String(currentEmergencyContactId);
+        const resolvedEmployeeId = currentEmployee?.id || employeeId;
 
-        const { error } = await supabaseClient
-            .from('emergency_contacts')
-            .delete()
-            .eq('id', deletingId);
+        const { data, error } = await supabaseClient
+            .from('onboarding_tasks')
+            .select('id, task_name, task_type, section, status, due_date, completed_at')
+            .eq('employee_id', String(resolvedEmployeeId));
 
         if (error) {
             console.error(error);
-            showToast('Could not delete emergency contact.', 'error');
+            target.innerHTML = '<div class="empty">Could not load onboarding</div>';
             return;
         }
 
-        const { data: remainingRows, error: verifyError } = await supabaseClient
-            .from('emergency_contacts')
-            .select('id')
-            .eq('id', deletingId)
-            .limit(1);
+        const rows = (data || []).sort((a, b) => {
+            const sectionCompare = String(a.section || '').localeCompare(String(b.section || ''));
+            if (sectionCompare !== 0) return sectionCompare;
+            return String(a.task_name || '').localeCompare(String(b.task_name || ''));
+        });
 
-        if (verifyError) {
-            console.error(verifyError);
-            showToast('Could not verify emergency contact deletion.', 'error');
+        if (!rows.length) {
+            target.innerHTML = '<div class="empty">No onboarding items loaded yet</div>';
+            if (summary) summary.textContent = '0 of 0 complete';
+            if (bar) bar.style.width = '0%';
             return;
         }
 
-        if (remainingRows && remainingRows.length) {
-            showToast('Emergency contact was not deleted.', 'error');
-            return;
-        }
+        const completed = rows.filter(r => r.status === 'Completed').length;
+        const total = rows.length;
+        const percent = Math.round((completed / total) * 100);
 
-        showToast('Emergency contact deleted.');
-        resetEmergencyContactForm();
+        if (summary) summary.textContent = `${completed} of ${total} complete`;
+        if (bar) bar.style.width = `${percent}%`;
 
-        if (resolvedEmployeeId) {
-            await loadEmergencyContacts(resolvedEmployeeId);
-        }
+        const grouped = {};
+        rows.forEach(row => {
+            const key = row.section || 'Onboarding';
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(row);
+        });
+
+        target.innerHTML = Object.entries(grouped).map(([section, items]) => `
+            <div style="margin-bottom:16px;">
+                <div style="font-weight:800; font-size:13px; letter-spacing:0.02em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">${esc(section)}</div>
+                ${items.map(row => {
+                    const done = row.status === 'Completed';
+                    const metaText = done
+                        ? `Completed${row.completed_at ? ` • ${new Date(row.completed_at).toLocaleDateString()}` : ''}`
+                        : row.due_date
+                            ? `Due ${row.due_date}`
+                            : 'Pending';
+
+                    return `
+                        <div class="history-item" style="margin-bottom:10px; border-left:4px solid ${done ? '#10b981' : '#3b82f6'};">
+                            <div class="history-top">
+                                <div>
+                                    <div class="history-title">${esc(row.task_name || 'Onboarding Task')}</div>
+                                    <div class="history-date">${esc(metaText)} • ${esc(row.task_type || 'task')}</div>
+                                </div>
+                                <span class="badge ${done ? 'badge-active' : 'badge-soft'}">
+                                    ${esc(row.status || 'Pending')}
+                                </span>
+                            </div>
+                            <div style="margin-top:8px;">
+                                ${done ? '<span class="muted" style="font-size:12px; font-weight:700; color:#0f8a63;">✓ Completed</span>' : `
+                                    <button class="button" onclick="markOnboardingComplete('${row.id}')">
+                                        Mark Complete
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `).join('');
 
     } catch (err) {
         console.error(err);
-        showToast('Error deleting emergency contact.', 'error');
+        target.innerHTML = '<div class="empty">Error loading onboarding</div>';
     }
 }
 
+async function markOnboardingComplete(id) {
+
+    const { error } = await supabaseClient
+        .from('onboarding_tasks')
+        .update({
+            status: 'Completed',
+            completed_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+    if (error) {
+        console.error(error);
+        showToast('Error updating item', 'error');
+        return;
+    }
+
+    showToast('Marked complete');
+    loadEmployeeOnboarding(currentEmployee.id);
+}
+
+async function deleteEmergencyContact() {
+
+    if (!currentEmergencyContactId) {
+
+        showToast('No emergency contact to delete.', 'error');
+
+        return;
+
+    }
+
+    if (!confirm('Are you sure you want to delete this emergency contact?')) {
+
+        return;
+
+    }
+
+    try {
+
+        const resolvedEmployeeId = currentEmployee?.dbId || currentEmployee?.id || null;
+
+        const deletingId = String(currentEmergencyContactId);
+
+        const { error } = await supabaseClient
+
+            .from('emergency_contacts')
+
+            .delete()
+
+            .eq('id', deletingId);
+
+        if (error) {
+
+            console.error(error);
+
+            showToast('Could not delete emergency contact.', 'error');
+
+            return;
+
+        }
+
+        const { data: remainingRows, error: verifyError } = await supabaseClient
+
+            .from('emergency_contacts')
+
+            .select('id')
+
+            .eq('id', deletingId)
+
+            .limit(1);
+
+        if (verifyError) {
+
+            console.error(verifyError);
+
+            showToast('Could not verify emergency contact deletion.', 'error');
+
+            return;
+
+        }
+
+        if (remainingRows && remainingRows.length) {
+
+            showToast('Emergency contact was not deleted.', 'error');
+
+            return;
+
+        }
+
+        showToast('Emergency contact deleted.');
+
+        resetEmergencyContactForm();
+
+        if (resolvedEmployeeId) {
+
+            await loadEmergencyContacts(resolvedEmployeeId);
+
+        }
+
+    } catch (err) {
+
+        console.error(err);
+
+        showToast('Error deleting emergency contact.', 'error');
+
+    }
+
+}
 
 async function loadStayInterviews(employeeId) {
     const target = safeGet('stayInterviewHistory');

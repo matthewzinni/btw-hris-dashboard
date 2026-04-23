@@ -1,5 +1,3 @@
-
-
 function openDrawer(employee) {
     if (!employee) return;
 
@@ -83,6 +81,7 @@ function openDrawer(employee) {
     if (typeof loadEmployeeReviews === 'function') loadEmployeeReviews(employee.id);
     if (typeof loadEmployeeIncidents === 'function') loadEmployeeIncidents(employee.id);
     if (typeof loadStayInterviews === 'function') loadStayInterviews(employee.id);
+    if (typeof loadEmployeeOnboarding === 'function') loadEmployeeOnboarding(employee.id);
     if (typeof loadEmployeeManualAtRisk === 'function') loadEmployeeManualAtRisk(employee.id);
     if (typeof loadEmployeeManualImpactPlayer === 'function') loadEmployeeManualImpactPlayer(employee.id);
 
@@ -95,6 +94,7 @@ function openDrawer(employee) {
     if (clearAtRiskBtn && typeof clearAtRiskStatus === 'function') clearAtRiskBtn.onclick = clearAtRiskStatus;
     if (markImpactPlayerBtn && typeof markImpactPlayer === 'function') markImpactPlayerBtn.onclick = markImpactPlayer;
     if (clearImpactPlayerBtn && typeof clearImpactPlayerStatus === 'function') clearImpactPlayerBtn.onclick = clearImpactPlayerStatus;
+
 }
 
 function closeDrawer() {

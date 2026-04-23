@@ -1142,6 +1142,7 @@
             <button class="tab-btn" data-tab="reviews" type="button" onclick="switchTab('reviews')">Reviews</button>
             <button class="tab-btn" data-tab="emergency" type="button"
               onclick="switchTab('emergency')">Emergency</button>
+            <button class="tab-btn" data-tab="onboarding" type="button" onclick="switchTab('onboarding')">Onboarding</button>
             <button class="tab-btn" data-tab="documents" type="button"
               onclick="switchTab('documents')">Documents</button>
             <button class="tab-btn" data-tab="employee" type="button" onclick="switchTab('employee')">Employee
@@ -1752,6 +1753,21 @@
                   <div id="reviewsHistory" class="history-list">
                     <div class="empty">No reviews loaded yet.</div>
                   </div>
+                </div>
+              </div>
+            </div>
+      </section>
+
+          <section class="tab-panel" id="tab-onboarding">
+            <div class="card">
+              <div class="card-header">Onboarding Packet</div>
+              <div class="card-body">
+                <div id="onboardingSummary" class="muted">Loading onboarding...</div>
+                <div style="margin:10px 0; background:#eef3f9; border-radius:999px; height:10px; overflow:hidden;">
+                  <div id="onboardingProgressBar" style="height:10px; width:0%; background:#3b82f6;"></div>
+                </div>
+                <div id="onboardingChecklist" class="history-list">
+                  <div class="empty">No onboarding items loaded yet.</div>
                 </div>
               </div>
             </div>
