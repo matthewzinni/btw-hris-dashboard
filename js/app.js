@@ -9,7 +9,9 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    initializeAuth();
+    if (typeof initializeAuth === 'function') {
+        initializeAuth();
+    }
 
     document.querySelectorAll('th[data-sort]').forEach(th => {
         th.style.cursor = 'pointer';
@@ -47,6 +49,9 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let EMPLOYEES = [];
+let CANDIDATES = [];
+let currentCandidate = null;
+let isCreatingCandidate = false;
 let currentFilteredEmployees = [];
 let currentEmployee = null;
 let currentDisciplineReportId = null;
@@ -71,15 +76,6 @@ let currentImpactPlayerRosterMap = {};
 // Shared helper, formatting, toast, and print functions now live in:
 // js/utils/helpers.js
 
-// =========================
-// AUTH
-// =========================
-function setLoginBusy(isBusy) {
-    const btn = safeGet('loginBtn');
-    if (!btn) return;
-    btn.disabled = isBusy;
-    btn.textContent = isBusy ? 'Signing In...' : 'Sign In';
-}
 
 // =========================
 // UI / NAVIGATION
@@ -111,23 +107,21 @@ function openNewEmployeeForm() {
 
     setText('drawerTitle', 'New Employee');
     setText('drawerSub', 'Create employee record');
-
-    if (safeGet('employeeIdInput')) safeGet('employeeIdInput').value = '';
-    if (safeGet('employeeStatusInput')) safeGet('employeeStatusInput').value = 'ACTIVE';
-    if (safeGet('employeeFirstNameInput')) safeGet('employeeFirstNameInput').value = '';
-    if (safeGet('employeeLastNameInput')) safeGet('employeeLastNameInput').value = '';
-    if (safeGet('employeeDepartmentInput')) safeGet('employeeDepartmentInput').value = '';
-    if (safeGet('employeePositionInput')) safeGet('employeePositionInput').value = '';
-    if (safeGet('employeeSupervisorInput')) safeGet('employeeSupervisorInput').value = '';
-    if (safeGet('employeePayTypeInput')) safeGet('employeePayTypeInput').value = '';
-    if (safeGet('employeeStandardHoursInput')) safeGet('employeeStandardHoursInput').value = '';
-    if (safeGet('employeeBenefitsStatusInput')) safeGet('employeeBenefitsStatusInput').value = '';
-    if (safeGet('employeeHireDateInput')) safeGet('employeeHireDateInput').value = '';
-    if (safeGet('employeeNextReviewInput')) safeGet('employeeNextReviewInput').value = '';
-    if (safeGet('employeeAnniversaryDateInput')) safeGet('employeeAnniversaryDateInput').value = '';
-    if (safeGet('employeeTenureBracketInput')) safeGet('employeeTenureBracketInput').value = '';
+    if (typeof resetEmployeeForm === 'function') resetEmployeeForm();
 
     if (safeGet('saveEmployeeBtn')) safeGet('saveEmployeeBtn').textContent = 'Save Employee';
+
+    if (safeGet('notesHistory')) safeGet('notesHistory').innerHTML = '<div class="empty">Save the employee before adding notes.</div>';
+    if (safeGet('disciplineHistory')) safeGet('disciplineHistory').innerHTML = '<div class="empty">Save the employee before adding discipline records.</div>';
+    if (safeGet('meetingsHistory')) safeGet('meetingsHistory').innerHTML = '<div class="empty">Save the employee before adding meetings.</div>';
+    if (safeGet('ecHistory')) safeGet('ecHistory').innerHTML = '<div class="empty">Save the employee before adding an emergency contact.</div>';
+    if (safeGet('reviewsHistory')) safeGet('reviewsHistory').innerHTML = '<div class="empty">Save the employee before adding reviews.</div>';
+    if (safeGet('incidentHistory')) safeGet('incidentHistory').innerHTML = '<div class="empty">Save the employee before adding incident reports.</div>';
+    if (safeGet('stayInterviewHistory')) safeGet('stayInterviewHistory').innerHTML = '<div class="empty">Save the employee before adding stay interviews.</div>';
+    if (safeGet('docHistory')) safeGet('docHistory').innerHTML = '<div class="empty">Save the employee before uploading documents.</div>';
+    if (safeGet('onboardingChecklist')) safeGet('onboardingChecklist').innerHTML = '<div class="empty">Save the employee before loading onboarding tasks.</div>';
+    if (safeGet('onboardingSummary')) safeGet('onboardingSummary').textContent = '0 of 0 complete';
+    if (safeGet('onboardingProgressBar')) safeGet('onboardingProgressBar').style.width = '0%';
 
     const backdrop = safeGet('drawerBackdrop');
     const drawer = safeGet('employeeDrawer');
@@ -237,6 +231,173 @@ function resetDrawerForms() {
     safeGet('reviewEditStatus')?.classList.add('hidden');
 }
 
+function normalizeEmployee(employee) {
+    if (!employee) return null;
+
+    const displayName = employee.displayName || employee.name || '';
+    const nameParts = String(displayName).trim().split(/\s+/).filter(Boolean);
+    const fallbackFirstName = nameParts[0] || '';
+    const fallbackLastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '';
+
+    return {
+        ...employee,
+
+        dbId: employee.dbId || employee.id || '',
+        id: employee.id || employee.dbId || '',
+
+        employee_id: employee.employee_id || employee.employeeId || employee.displayId || employee.id || employee.dbId || '',
+
+        first_name: employee.first_name || employee.firstName || employee.first || fallbackFirstName || '',
+        last_name: employee.last_name || employee.lastName || employee.last || fallbackLastName || '',
+
+        department: employee.department || employee.dept || employee.displayDepartment || '',
+        position: employee.position || employee.title || employee.displayPosition || '',
+        supervisor: employee.supervisor || employee.displaySupervisor || '',
+
+        status: employee.status || employee.displayStatus || 'ACTIVE',
+
+        pay_type: employee.pay_type || employee.payType || '',
+        standard_hours: employee.standard_hours || employee.standardHours || '',
+        benefits_status: employee.benefits_status || employee.benefitsStatus || '',
+
+        hire_date: employee.hire_date || employee.hireDate || employee.displayHireDate || '',
+        next_review_date: employee.next_review_date || employee.nextReviewDate || '',
+        anniversary_date: employee.anniversary_date || employee.anniversaryDate || '',
+        tenure_bracket: employee.tenure_bracket || employee.tenureBracket || '',
+
+        work_email: employee.work_email || employee.workEmail || '',
+        personal_email: employee.personal_email || employee.personalEmail || '',
+        phone: employee.phone || '',
+        notes: employee.notes || ''
+    };
+}
+
+function populateEmployeeAdminForm(employee) {
+    if (!employee) return;
+    employee = normalizeEmployee(employee);
+    if (!employee) return;
+
+    const drawerTitleName = String(safeGet('drawerTitle')?.textContent || '').trim();
+    const drawerSubParts = String(safeGet('drawerSub')?.textContent || '').split('•').map(part => part.trim());
+    const fallbackName = `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || drawerTitleName;
+    const nameParts = String(fallbackName).trim().split(/\s+/).filter(Boolean);
+
+    const values = {
+        employeeId: employee.employee_id || employee.id || employee.dbId || '',
+        status: employee.status || 'Active',
+        firstName: employee.first_name || nameParts[0] || '',
+        lastName: employee.last_name || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : ''),
+        department: employee.department || drawerSubParts[1] || '',
+        position: employee.position || drawerSubParts[0] || '',
+        supervisor: employee.supervisor || '',
+        payType: employee.pay_type || '',
+        standardHours: employee.standard_hours || '',
+        benefitsStatus: employee.benefits_status || '',
+        hireDate: employee.hire_date || '',
+        nextReviewDate: employee.next_review_date || '',
+        anniversaryDate: employee.anniversary_date || '',
+        tenureBracket: employee.tenure_bracket || '',
+        workEmail: employee.work_email || '',
+        personalEmail: employee.personal_email || '',
+        phone: employee.phone || '',
+        notes: employee.notes || ''
+    };
+
+    const setField = (id, value) => {
+        const el = safeGet(id);
+        if (!el) return;
+        el.value = value ?? '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    const setByPlaceholder = (placeholder, value) => {
+        const el = document.querySelector(`input[placeholder="${placeholder}"], select[placeholder="${placeholder}"], textarea[placeholder="${placeholder}"]`);
+        if (!el) return;
+        el.value = value ?? '';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    setField('empId', values.employeeId);
+    setField('employeeId', values.employeeId);
+    setField('empEmployeeId', values.employeeId);
+    setByPlaceholder('Employee ID', values.employeeId);
+
+    setField('empStatus', values.status);
+    setField('status', values.status);
+
+    setField('empFirstName', values.firstName);
+    setField('firstName', values.firstName);
+    setField('employeeFirstName', values.firstName);
+    setByPlaceholder('First name', values.firstName);
+
+    setField('empLastName', values.lastName);
+    setField('lastName', values.lastName);
+    setField('employeeLastName', values.lastName);
+    setByPlaceholder('Last name', values.lastName);
+
+    setField('empDepartment', values.department);
+    setField('department', values.department);
+    setField('employeeDepartment', values.department);
+    setByPlaceholder('Department', values.department);
+
+    setField('empPosition', values.position);
+    setField('position', values.position);
+    setField('employeePosition', values.position);
+    setByPlaceholder('Position', values.position);
+
+    setField('empSupervisor', values.supervisor);
+    setField('supervisor', values.supervisor);
+    setByPlaceholder('Supervisor', values.supervisor);
+
+    setField('empPayType', values.payType);
+    setField('payType', values.payType);
+    setByPlaceholder('Hourly, Salary, etc.', values.payType);
+
+    setField('empStandardHours', values.standardHours);
+    setField('standardHours', values.standardHours);
+    setByPlaceholder('40', values.standardHours);
+
+    setField('empBenefitsStatus', values.benefitsStatus);
+    setField('benefitsStatus', values.benefitsStatus);
+    setByPlaceholder('Benefits status', values.benefitsStatus);
+
+    setField('empHireDate', values.hireDate);
+    setField('hireDate', values.hireDate);
+    setField('empNextReviewDate', values.nextReviewDate);
+    setField('nextReviewDate', values.nextReviewDate);
+    setField('empAnniversaryDate', values.anniversaryDate);
+    setField('anniversaryDate', values.anniversaryDate);
+    setField('empTenureBracket', values.tenureBracket);
+    setField('tenureBracket', values.tenureBracket);
+
+    setField('empWorkEmail', values.workEmail);
+    setField('workEmail', values.workEmail);
+    setField('empPersonalEmail', values.personalEmail);
+    setField('personalEmail', values.personalEmail);
+    setField('empPhone', values.phone);
+    setField('phone', values.phone);
+    setField('empNotes', values.notes);
+    setField('notes', values.notes);
+
+    const statusSelect = Array.from(document.querySelectorAll('select')).find(select => {
+        return Array.from(select.options || []).some(option => {
+            const optionText = option.textContent.trim().toLowerCase();
+            return optionText === 'active' || optionText === 'inactive' || optionText === 'leave';
+        });
+    });
+
+    if (statusSelect) {
+        const normalizedStatus = String(values.status || '').toLowerCase();
+        const matchingOption = Array.from(statusSelect.options || []).find(option => {
+            return option.value.toLowerCase() === normalizedStatus || option.textContent.trim().toLowerCase() === normalizedStatus;
+        });
+        if (matchingOption) statusSelect.value = matchingOption.value;
+        statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+}
+
 // =========================
 // EDIT CANCEL HANDLERS
 // =========================
@@ -263,125 +424,6 @@ function cancelStayInterviewEdit() {
 
 function compareText(a, b) {
     return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
-}
-
-async function signIn() {
-    const email = safeGet('loginEmail')?.value.trim().toLowerCase() || '';
-    const password = safeGet('loginPassword')?.value || '';
-
-    if (!email || !password) {
-        showToast('Enter your email and password.', 'error');
-        return;
-    }
-
-    setLoginBusy(true);
-
-    try {
-        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-
-        if (error) {
-            console.error(error);
-            showToast('Invalid email or password, or this account is not authorized.', 'error');
-            setAuthView(null);
-            return;
-        }
-
-        if (!data?.session) {
-            showToast('Sign-in failed. No active session was created.', 'error');
-            setAuthView(null);
-            return;
-        }
-
-        setAuthView(data.session);
-        setText('currentUserEmail', data.session.user?.email || email);
-        showToast('Signed in successfully.');
-    } catch (err) {
-        console.error(err);
-        showToast('Something went wrong during sign-in.', 'error');
-        setAuthView(null);
-    } finally {
-        setLoginBusy(false);
-    }
-}
-
-async function signOut() {
-    try {
-        const { error } = await supabaseClient.auth.signOut();
-        if (error) {
-            console.error(error);
-            showToast('Could not log out.', 'error');
-            return;
-        }
-
-        currentEmployee = null;
-        EMPLOYEES = [];
-        currentFilteredEmployees = [];
-        closeDrawer();
-        showToast('Logged out.');
-        setAuthView(null);
-    } catch (err) {
-        console.error(err);
-        showToast('Something went wrong during logout.', 'error');
-    }
-}
-
-async function initializeAuth() {
-    try {
-        const { data, error } = await supabaseClient.auth.getSession();
-
-        if (error) {
-            console.error(error);
-            showToast('Could not check session.', 'error');
-            setAuthView(null);
-            return;
-        }
-
-        setAuthView(data?.session || null);
-
-        supabaseClient.auth.onAuthStateChange((_event, session) => {
-            setAuthView(session || null);
-        });
-    } catch (err) {
-        console.error(err);
-        showToast('Could not initialize authentication.', 'error');
-        setAuthView(null);
-    }
-}
-
-function setAuthView(session) {
-    const authView = safeGet('authView');
-    const appView = safeGet('appView');
-
-    if (!authView || !appView) return;
-
-    if (session?.user) {
-        authView.classList.add('hidden');
-        appView.classList.remove('hidden');
-        setText('currentUserEmail', session.user.email || 'Signed in');
-
-        currentUserRole = 'user';
-        applyRolePermissions();
-
-        getUserRole()
-            .then(role => {
-                currentUserRole = role || 'user';
-                applyRolePermissions();
-            })
-            .catch(err => {
-                console.error(err);
-                currentUserRole = 'user';
-                applyRolePermissions();
-            });
-
-        loadAllDashboardData();
-    } else {
-        currentUserRole = 'user';
-        applyRolePermissions();
-        appView.classList.add('hidden');
-        authView.classList.remove('hidden');
-        setText('currentUserEmail', '—');
-        if (safeGet('loginPassword')) safeGet('loginPassword').value = '';
-    }
 }
 
 let isLoadingDashboard = false;
@@ -543,6 +585,7 @@ async function loadAllDashboardData() {
     try {
         await Promise.all([
             loadEmployees(),
+            loadCandidates(),
             loadSummaryMetrics(),
             loadRecentActivity()
         ]);
@@ -562,53 +605,435 @@ async function loadAllDashboardData() {
 }
 
 async function loadEmployees() {
-    try {
-        const { data, error } = await getEmployees();
 
+    if (typeof loadEmployeesAndRefreshUi === 'function') {
+
+        return await loadEmployeesAndRefreshUi();
+
+    }
+
+    showToast('Employees data module is not loaded.', 'error');
+
+    return [];
+
+}
+
+// =========================
+// CANDIDATES
+// =========================
+async function loadCandidates() {
+    const body = safeGet('candidateBody');
+    if (body) {
+        body.innerHTML = '<tr><td colspan="5" class="empty">Loading candidates…</td></tr>';
+    }
+
+    try {
+        const { data, error } = await supabaseClient
+            .from('candidates')
+            .select('*')
+            .neq('stage', 'Hired')
+            .order('created_at', { ascending: false });
 
         if (error) {
             console.error(error);
-            setText('empCount', 'Error loading employees');
-            showToast('Could not load employees from Supabase.', 'error');
+            if (body) {
+                body.innerHTML = '<tr><td colspan="5" class="empty">Could not load candidates</td></tr>';
+            }
+            setText('candidateCount', 'Candidates unavailable');
             return;
         }
 
-        EMPLOYEES = (data || []).map(e => ({
-            dbId: e.id,
-            id: e.employee_id || e.id,
-            first: e.first_name,
-            last: e.last_name,
-            dept: e.department,
-            position: e.position,
-            supervisor: e.supervisor,
-            hireDate: e.hire_date ? new Date(e.hire_date + 'T00:00:00') : null,
-            status: String(e.status || '').toUpperCase(),
-            payType: e.pay_type,
-            stdHours: Number(e.standard_hours) || 0,
-            nextReview: e.next_review_date ? new Date(e.next_review_date + 'T00:00:00') : null,
-            tenureMonths: Number(e.tenure_months) || 0,
-            tenureYears: Number(e.tenure_years) || 0,
-            benefitsStatus: e.benefits_status,
-            anniversaryDate: e.anniversary_date ? new Date(e.anniversary_date + 'T00:00:00') : null,
-            tenureBracket: e.tenure_bracket,
-            raw: e
-        }));
-
-        populateDepartmentFilter();
-        renderRoster();
-        renderDepartmentSummary();
-        renderKpiEmployeeMetrics();
-
-        await loadReviewDashboard();
-        await loadExecutiveInsight();
-        await loadRiskEmployees();
-        await loadImpactPlayers();
+        CANDIDATES = data || [];
+        renderCandidates();
     } catch (err) {
         console.error(err);
-        setText('empCount', 'Error loading employees');
-        showToast('Something went wrong while loading employee data.', 'error');
+        if (body) {
+            body.innerHTML = '<tr><td colspan="5" class="empty">Could not load candidates</td></tr>';
+        }
+        setText('candidateCount', 'Candidates unavailable');
     }
 }
+
+function buildCandidateInterviewNotice(candidate) {
+
+    const status = String(candidate?.interview_status || '').toLowerCase();
+
+    if (status === 'cancelled' || status === 'completed' || status === 'no show') return '';
+
+    if (!candidate?.interview_date || !candidate?.interview_time) return '';
+
+    const interviewDateTime = new Date(`${candidate.interview_date}T${candidate.interview_time}`);
+
+    const now = new Date();
+
+    if (Number.isNaN(interviewDateTime.getTime())) return '';
+
+    if (interviewDateTime <= now) return '';
+
+    const date = interviewDateTime.toLocaleDateString();
+
+    const time = interviewDateTime.toLocaleTimeString([], {
+
+        hour: 'numeric',
+
+        minute: '2-digit'
+
+    });
+
+    const type = candidate.interview_type ? ` • ${candidate.interview_type}` : '';
+
+    return `Upcoming Interview: ${date} at ${time}${type}`;
+
+}
+
+function renderCandidates() {
+    const pipeline = safeGet('candidatePipeline');
+    const tableBody = safeGet('candidateBody');
+
+    const stages = ['Applied', 'Screening', 'Interviewing', 'Offer'];
+    setText('candidateCount', `${CANDIDATES.length} candidate${CANDIDATES.length === 1 ? '' : 's'}`);
+
+    if (tableBody) {
+        if (!CANDIDATES.length) {
+            tableBody.innerHTML = '<tr><td colspan="5" class="empty">No candidates in pipeline</td></tr>';
+        } else {
+            tableBody.innerHTML = CANDIDATES.map(candidate => {
+                const candidateName = `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || 'Candidate';
+                const appliedDate = candidate.applied_date || candidate.created_at || '';
+                const interviewNotice = buildCandidateInterviewNotice(candidate);
+                return `
+                    <tr class="candidate-row" data-candidate-id="${esc(candidate.id)}" style="cursor:pointer;">
+                        <td>
+                            <button class="link-button" type="button" data-candidate-id="${esc(candidate.id)}">
+                                ${esc(candidateName)}
+                            </button>
+                        </td>
+                        <td>${esc(candidate.position || '')}</td>
+                        <td>
+                          ${esc(candidate.stage || 'Applied')}
+                          ${interviewNotice ? `<div class="candidate-interview-alert">${esc(interviewNotice)}</div>` : ''}
+                        </td>
+                        <td>${esc(candidate.source || '')}</td>
+                        <td>${appliedDate ? esc(new Date(appliedDate).toLocaleDateString()) : '—'}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            tableBody.querySelectorAll('[data-candidate-id]').forEach(el => {
+                el.addEventListener('click', async event => {
+                    event.stopPropagation();
+
+                    if (typeof window.openCandidateDetails === 'function') {
+                        await window.openCandidateDetails(el.dataset.candidateId);
+                        return;
+                    }
+
+                    await openCandidateDrawer(el.dataset.candidateId);
+                });
+            });
+        }
+    }
+
+    if (!pipeline) return;
+}
+
+async function updateCandidateStage(candidateId, stage) {
+    const { error } = await supabaseClient
+        .from('candidates')
+        .update({ stage })
+        .eq('id', candidateId);
+
+    if (error) {
+        console.error(error);
+        showToast('Could not update candidate stage.', 'error');
+        await loadCandidates();
+        return;
+    }
+
+    showToast('Candidate stage updated.');
+    await loadCandidates();
+}
+
+function generateEmployeeId() {
+    const maxExisting = EMPLOYEES.reduce((max, employee) => {
+        const match = String(employee.id || '').match(/(\d+)$/);
+        const numeric = match ? Number(match[1]) : 0;
+        return Math.max(max, numeric);
+    }, 0);
+
+    return `BTW${maxExisting + 1}`;
+}
+
+async function convertCandidateToEmployee(candidateId) {
+    const candidate = CANDIDATES.find(item => String(item.id) === String(candidateId));
+    if (!candidate) {
+        showToast('Candidate not found.', 'error');
+        return;
+    }
+
+    const newEmployeeId = generateEmployeeId();
+
+    const payload = {
+        id: newEmployeeId,
+        first_name: candidate.first_name || '',
+        last_name: candidate.last_name || '',
+        department: candidate.department || '',
+        position: candidate.position || '',
+        supervisor: '',
+        status: 'ACTIVE',
+        pay_type: null,
+        standard_hours: 40,
+        benefits_status: null,
+        hire_date: todayInputValue(),
+        next_review_date: null,
+        anniversary_date: null,
+        tenure_bracket: '0-6 months'
+    };
+
+    const { error } = await createEmployee(payload);
+    if (error) {
+        console.error(error);
+        showToast('Could not convert candidate to employee.', 'error');
+        return;
+    }
+
+    const { error: candidateError } = await supabaseClient
+        .from('candidates')
+        .update({ stage: 'Hired' })
+        .eq('id', candidate.id);
+
+    if (candidateError) {
+        console.error(candidateError);
+        showToast('Employee created, but candidate stage did not update.', 'error');
+    } else {
+        showToast('Candidate converted to employee.');
+    }
+
+    await loadEmployees();
+    await loadCandidates();
+    await loadSummaryMetrics();
+    await loadRecentActivity();
+    await loadReviewDashboard();
+
+    const refreshedEmployee = EMPLOYEES.find(e => String(e.id) === String(newEmployeeId));
+    if (refreshedEmployee && typeof openDrawer === 'function') {
+        closeCandidateDrawer();
+        openDrawer(refreshedEmployee);
+        switchTab('onboarding');
+    }
+}
+
+function switchCandidateTab(tabName) {
+    document.querySelectorAll('[data-candidate-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.candidateTab === tabName);
+    });
+
+    document.querySelectorAll('#candidateDrawer .tab-panel').forEach(panel => {
+        panel.classList.toggle('active', panel.id === `candidate-tab-${tabName}`);
+    });
+}
+
+function closeCandidateDrawer() {
+    safeGet('drawerBackdrop')?.classList.remove('open');
+    const drawer = safeGet('candidateDrawer');
+    if (drawer) {
+        drawer.classList.remove('open');
+        drawer.style.display = '';
+    }
+    currentCandidate = null;
+    isCreatingCandidate = false;
+}
+
+function resetCandidateForm() {
+    if (safeGet('candidateFirstNameInput')) safeGet('candidateFirstNameInput').value = '';
+    if (safeGet('candidateLastNameInput')) safeGet('candidateLastNameInput').value = '';
+    if (safeGet('candidateEmailInput')) safeGet('candidateEmailInput').value = '';
+    if (safeGet('candidatePhoneInput')) safeGet('candidatePhoneInput').value = '';
+    if (safeGet('candidatePositionInput')) safeGet('candidatePositionInput').value = '';
+    if (safeGet('candidateDepartmentInput')) safeGet('candidateDepartmentInput').value = '';
+    if (safeGet('candidateStageInput')) safeGet('candidateStageInput').value = 'Applied';
+    if (safeGet('candidateSourceInput')) safeGet('candidateSourceInput').value = '';
+    if (safeGet('candidateAppliedDateInput')) safeGet('candidateAppliedDateInput').value = todayInputValue();
+    if (safeGet('candidateNotesInput')) safeGet('candidateNotesInput').value = '';
+    if (safeGet('candidateNotesPreview')) safeGet('candidateNotesPreview').innerHTML = '<div class="empty">Candidate notes will appear here.</div>';
+}
+
+function openNewCandidateForm() {
+    currentCandidate = null;
+    isCreatingCandidate = true;
+    resetCandidateForm();
+    setText('candidateDrawerTitle', 'New Candidate');
+    setText('candidateDrawerSub', 'Create candidate record');
+    switchCandidateTab('profile');
+    const backdrop = safeGet('drawerBackdrop');
+    const drawer = safeGet('candidateDrawer');
+
+    if (backdrop) backdrop.classList.add('open');
+    if (drawer) {
+        drawer.classList.add('open');
+        drawer.style.display = 'block';
+        drawer.style.zIndex = '99999';
+    }
+}
+
+async function openCandidateDrawer(candidateId) {
+    const candidate = CANDIDATES.find(item => String(item.id) === String(candidateId));
+    if (!candidate) {
+        showToast('Candidate not found.', 'error');
+        return;
+    }
+
+    currentCandidate = candidate;
+    isCreatingCandidate = false;
+    resetCandidateForm();
+
+    if (safeGet('candidateFirstNameInput')) safeGet('candidateFirstNameInput').value = candidate.first_name || '';
+    if (safeGet('candidateLastNameInput')) safeGet('candidateLastNameInput').value = candidate.last_name || '';
+    if (safeGet('candidateEmailInput')) safeGet('candidateEmailInput').value = candidate.email || '';
+    if (safeGet('candidatePhoneInput')) safeGet('candidatePhoneInput').value = candidate.phone || '';
+    if (safeGet('candidatePositionInput')) safeGet('candidatePositionInput').value = candidate.position || '';
+    if (safeGet('candidateDepartmentInput')) safeGet('candidateDepartmentInput').value = candidate.department || '';
+    if (safeGet('candidateStageInput')) safeGet('candidateStageInput').value = candidate.stage || 'Applied';
+    if (safeGet('candidateSourceInput')) safeGet('candidateSourceInput').value = candidate.source || '';
+    if (safeGet('candidateAppliedDateInput')) safeGet('candidateAppliedDateInput').value = candidate.applied_date || todayInputValue();
+    if (safeGet('candidateNotesInput')) safeGet('candidateNotesInput').value = candidate.notes || '';
+    if (safeGet('candidateNotesPreview')) {
+        safeGet('candidateNotesPreview').innerHTML = candidate.notes
+            ? `<div class="history-item"><div class="history-title">Current Notes</div><div class="history-body">${nl2br(candidate.notes)}</div></div>`
+            : '<div class="empty">No candidate notes yet.</div>';
+    }
+    // Restore interview fields into drawer
+    if (safeGet('candidateInterviewDate')) {
+        safeGet('candidateInterviewDate').value = candidate.interview_date || '';
+    }
+    if (safeGet('candidateInterviewTime')) {
+        safeGet('candidateInterviewTime').value = candidate.interview_time || '';
+    }
+    if (safeGet('candidateInterviewType')) {
+        safeGet('candidateInterviewType').value = candidate.interview_type || '';
+    }
+    if (safeGet('candidateInterviewStatus')) {
+        safeGet('candidateInterviewStatus').value = candidate.interview_status || 'Scheduled';
+    }
+    if (safeGet('candidateInterviewNotes')) {
+        safeGet('candidateInterviewNotes').value = candidate.interview_notes || '';
+    }
+
+    setText('candidateDrawerTitle', `${candidate.first_name || ''} ${candidate.last_name || ''}`.trim() || 'Candidate');
+    setText('candidateDrawerSub', `${candidate.position || 'Candidate'} • ${candidate.stage || 'Applied'}`);
+    switchCandidateTab('profile');
+    const backdrop = safeGet('drawerBackdrop');
+    const drawer = safeGet('candidateDrawer');
+
+    if (backdrop) backdrop.classList.add('open');
+    if (drawer) {
+        drawer.classList.add('open');
+        drawer.style.display = 'block';
+        drawer.style.zIndex = '99999';
+    }
+}
+
+async function saveCandidateRecord() {
+    const payload = {
+        first_name: safeGet('candidateFirstNameInput')?.value?.trim() || '',
+        last_name: safeGet('candidateLastNameInput')?.value?.trim() || '',
+        email: safeGet('candidateEmailInput')?.value?.trim() || '',
+        phone: safeGet('candidatePhoneInput')?.value?.trim() || '',
+        position: safeGet('candidatePositionInput')?.value?.trim() || '',
+        department: safeGet('candidateDepartmentInput')?.value?.trim() || '',
+        stage: safeGet('candidateStageInput')?.value || 'Applied',
+        source: safeGet('candidateSourceInput')?.value?.trim() || '',
+        applied_date: safeGet('candidateAppliedDateInput')?.value || null,
+        notes: safeGet('candidateNotesInput')?.value || '',
+        interview_date: safeGet('candidateInterviewDate')?.value || null,
+        interview_time: safeGet('candidateInterviewTime')?.value || null,
+        interview_type: safeGet('candidateInterviewType')?.value || '',
+        interview_status: safeGet('candidateInterviewStatus')?.value || '',
+        interview_notes: safeGet('candidateInterviewNotes')?.value || '',
+    };
+
+    if (!payload.first_name || !payload.last_name) {
+        showToast('First and last name are required.', 'error');
+        return;
+    }
+
+    let error = null;
+    if (isCreatingCandidate || !currentCandidate) {
+        const result = await supabaseClient.from('candidates').insert([payload]);
+        error = result.error;
+    } else {
+        const result = await supabaseClient
+            .from('candidates')
+            .update(payload)
+            .eq('id', currentCandidate.id);
+        error = result.error;
+    }
+
+    if (error) {
+        console.error('Save candidate error:', error);
+        showToast(error.message || 'Could not save candidate.', 'error');
+        return;
+    }
+
+    console.log('Candidate saved successfully:', payload);
+    showToast(isCreatingCandidate || !currentCandidate ? 'Candidate created.' : 'Candidate updated.');
+    await loadCandidates();
+
+    const refreshedCandidate = CANDIDATES.find(item =>
+        String(item.email || '') === String(payload.email || '') &&
+        String(item.first_name || '') === String(payload.first_name || '') &&
+        String(item.last_name || '') === String(payload.last_name || '')
+    );
+
+    if (refreshedCandidate) {
+        await openCandidateDrawer(refreshedCandidate.id);
+    } else {
+        closeCandidateDrawer();
+    }
+}
+
+async function deleteCandidateRecord() {
+    if (!currentCandidate) {
+        showToast('Open a candidate first.', 'error');
+        return;
+    }
+
+    if (!confirm('Delete this candidate? This cannot be undone.')) {
+        return;
+    }
+
+    const { error } = await supabaseClient
+        .from('candidates')
+        .delete()
+        .eq('id', currentCandidate.id);
+
+    if (error) {
+        console.error(error);
+        showToast('Could not delete candidate.', 'error');
+        return;
+    }
+
+    showToast('Candidate deleted.');
+    closeCandidateDrawer();
+    await loadCandidates();
+}
+
+async function convertCurrentCandidateToEmployee() {
+    if (!currentCandidate) {
+        showToast('Open a candidate first.', 'error');
+        return;
+    }
+    await convertCandidateToEmployee(currentCandidate.id);
+}
+
+window.openCandidatesView = openCandidatesView;
+window.openNewCandidateForm = openNewCandidateForm;
+window.openCandidateDrawer = openCandidateDrawer;
+window.closeCandidateDrawer = closeCandidateDrawer;
+window.switchCandidateTab = switchCandidateTab;
+window.saveCandidateRecord = saveCandidateRecord;
+window.deleteCandidateRecord = deleteCandidateRecord;
+window.convertCurrentCandidateToEmployee = convertCurrentCandidateToEmployee;
 
 function populateDepartmentFilter() {
     const deptSelect = safeGet('deptFilter');
@@ -627,109 +1052,28 @@ function populateDepartmentFilter() {
     deptSelect.value = currentValue;
 }
 
-function getFilteredEmployees() {
-    const q = (safeGet('globalSearch')?.value || '').toLowerCase().trim();
-    const dept = safeGet('deptFilter')?.value || '';
-    const status = safeGet('statusFilter')?.value || '';
+function openCandidatesView() {
 
-    return EMPLOYEES.filter(e => {
-        const haystack = `${e.first || ''} ${e.last || ''} ${e.id || ''} ${e.position || ''} ${e.dept || ''} ${e.supervisor || ''}`.toLowerCase();
+    const el = document.getElementById('candidatesCard');
 
-        if (q && !haystack.includes(q)) return false;
-        if (dept && e.dept !== dept) return false;
-        if (status && e.status !== status) return false;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-        return true;
-    }).sort((a, b) => {
-        let valA, valB;
-
-        switch (currentSort.column) {
-            case 'id':
-                valA = a.id || '';
-                valB = b.id || '';
-                break;
-            case 'name':
-                valA = `${a.last || ''} ${a.first || ''}`;
-                valB = `${b.last || ''} ${b.first || ''}`;
-                break;
-            case 'dept':
-                valA = a.dept || '';
-                valB = b.dept || '';
-                break;
-            case 'position':
-                valA = a.position || '';
-                valB = b.position || '';
-                break;
-            case 'supervisor':
-                valA = a.supervisor || '';
-                valB = b.supervisor || '';
-                break;
-            case 'hireDate': {
-                const timeA = a.hireDate ? a.hireDate.getTime() : 0;
-                const timeB = b.hireDate ? b.hireDate.getTime() : 0;
-                return currentSort.direction === 'asc' ? timeA - timeB : timeB - timeA;
-            }
-            case 'status':
-                valA = a.status || '';
-                valB = b.status || '';
-                break;
-            default:
-                valA = `${a.last || ''} ${a.first || ''}`;
-                valB = `${b.last || ''} ${b.first || ''}`;
-        }
-
-        const result = compareText(valA, valB);
-        return currentSort.direction === 'asc' ? result : -result;
-    });
+    el.style.boxShadow = '0 0 0 3px rgba(59,130,246,0.25)';
+    setTimeout(() => {
+        el.style.boxShadow = '';
+    }, 1500);
 }
+
+window.openCandidatesView = openCandidatesView;
+
 
 
 function renderRoster() {
-    const body = safeGet('empBody');
-    if (!body) return;
-
-    const filtered = getFilteredEmployees();
-    currentFilteredEmployees = filtered;
-
-    if (!filtered.length) {
-        body.innerHTML = '<tr><td colspan="7" class="empty">No employees match the current filters</td></tr>';
-        setText('empCount', `Showing 0 of ${EMPLOYEES.length} employees`);
+    if (typeof renderEmployeeRoster === 'function') {
+        renderEmployeeRoster();
         return;
     }
-
-    body.innerHTML = filtered.map(e => `
-        <tr>
-          <td>${esc(e.id)}</td>
-          <td>
-            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-              <button class="link-button" data-view-id="${esc(e.id)}" type="button">
-                ${esc(e.first)} ${esc(e.last)}
-              </button>
-              ${buildRiskBadgeHtml(getEmployeeRiskMeta(e))}
-              ${buildImpactBadgeHtml(getEmployeeImpactMeta(e))}
-            </div>
-          </td>
-          <td>${esc(e.dept || '')}</td>
-          <td>${esc(e.position || '')}</td>
-          <td>${esc(e.supervisor || '')}</td>
-          <td>${fmtDate(e.hireDate)}</td>
-          <td><span class="${statusBadge(e.status)}">${esc(e.status)}</span></td>
-        </tr>
-      `).join('');
-
-    setText('empCount', `Showing ${filtered.length} of ${EMPLOYEES.length} employees`);
-
-    document.querySelectorAll('[data-view-id]').forEach(btn => {
-        btn.addEventListener('click', () => {
-            const employee = EMPLOYEES.find(e =>
-                String(e.id) === String(btn.dataset.viewId) ||
-                String(e.dbId) === String(btn.dataset.viewId)
-            );
-            if (employee && typeof openDrawer === 'function') {
-                openDrawer(employee);
-            }
-        });
-    });
 }
 
 function clearFilters() {
@@ -784,45 +1128,45 @@ function renderKpiEmployeeMetrics() {
     });
     const reviewsDue = overdueReviewEmployees.length;
 
-    let turnoverRiskContributors = 0;
-    const turnoverRisk = reviewEligibleActive.reduce((score, e) => {
-        let employeeRisk = 0;
+    const turnoverRiskEmployees = reviewEligibleActive.filter(e => {
         const tenureMonths = Number(e.tenureMonths) || 0;
+        const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
+        const employeeKey = String(e.dbId || e.id || '');
+        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
+        const isAtRisk = !!riskMeta && (
+            riskMeta.lowReview === true ||
+            Number(riskMeta.openIncidentCount || 0) > 0 ||
+            String(riskMeta.manualReason || '').trim() !== ''
+        );
 
-        if (tenureMonths <= 1) employeeRisk += 3;
-        else if (tenureMonths <= 3) employeeRisk += 2;
-        else if (tenureMonths <= 6) employeeRisk += 1;
+        return isFirstThreeMonths && isAtRisk;
+    });
 
-        if (e.nextReview && e.nextReview instanceof Date && !isNaN(e.nextReview)) {
-            const reviewDate = new Date(e.nextReview);
-            reviewDate.setHours(0, 0, 0, 0);
-            if (reviewDate <= today) employeeRisk += 1;
-        }
-
-        if (employeeRisk > 0) turnoverRiskContributors += 1;
-        return score + employeeRisk;
-    }, 0);
+    const turnoverRiskContributors = turnoverRiskEmployees.length;
+    const turnoverRisk = reviewEligibleActive.length
+        ? Math.min(100, (turnoverRiskContributors / reviewEligibleActive.length) * 100)
+        : 0;
 
     setText('kActiveHC', active.length);
     setText('kDepartments', departments.length);
     if (typeof window.updateTurnoverRiskKpi === 'function') {
         window.updateTurnoverRiskKpi(
             turnoverRisk,
-            `${turnoverRiskContributors} employee${turnoverRiskContributors === 1 ? '' : 's'} contributing to risk`
+            `${turnoverRiskContributors} at-risk employee${turnoverRiskContributors === 1 ? '' : 's'} in first 3 months`
         );
     } else {
         setText('kTurnoverRisk', turnoverRisk);
         setText(
             'kTurnoverRiskSub',
-            `${turnoverRiskContributors} employee${turnoverRiskContributors === 1 ? '' : 's'} contributing to risk`
+            `${turnoverRiskContributors} at-risk employee${turnoverRiskContributors === 1 ? '' : 's'} in first 3 months`
         );
     }
 
     const turnoverRiskCard = safeGet('kTurnoverRisk')?.closest('.kpi-card');
     if (turnoverRiskCard) {
         turnoverRiskCard.classList.remove('good', 'warn', 'alert');
-        if (turnoverRisk >= 15) turnoverRiskCard.classList.add('alert');
-        else if (turnoverRisk >= 7) turnoverRiskCard.classList.add('warn');
+        if (turnoverRisk >= 40) turnoverRiskCard.classList.add('alert');
+        else if (turnoverRisk >= 20) turnoverRiskCard.classList.add('warn');
         else turnoverRiskCard.classList.add('good');
     }
 
@@ -1693,46 +2037,6 @@ async function loadRecentActivity() {
     }
 }
 
-
-function populateEmployeeAdminForm(employee) {
-    if (!employee) return;
-    safeGet('employeeIdInput').value = employee.id || '';
-    safeGet('employeeFirstNameInput').value = employee.first || '';
-    safeGet('employeeLastNameInput').value = employee.last || '';
-    safeGet('employeeDepartmentInput').value = employee.dept || '';
-    safeGet('employeePositionInput').value = employee.position || '';
-    safeGet('employeeSupervisorInput').value = employee.supervisor || '';
-    safeGet('employeeStatusInput').value = employee.status || 'ACTIVE';
-    safeGet('employeePayTypeInput').value = employee.payType || '';
-    safeGet('employeeStandardHoursInput').value = employee.stdHours || '';
-    safeGet('employeeBenefitsStatusInput').value = employee.benefitsStatus || '';
-    safeGet('employeeHireDateInput').value = toInputDate(employee.hireDate);
-    safeGet('employeeNextReviewInput').value = toInputDate(employee.nextReview);
-    safeGet('employeeAnniversaryDateInput').value = toInputDate(employee.anniversaryDate);
-    safeGet('employeeTenureBracketInput').value = employee.tenureBracket || '';
-}
-
-function resetEmployeeAdminForm() {
-    safeGet('employeeIdInput').value = '';
-    safeGet('employeeFirstNameInput').value = '';
-    safeGet('employeeLastNameInput').value = '';
-    safeGet('employeeDepartmentInput').value = '';
-    safeGet('employeePositionInput').value = '';
-    safeGet('employeeSupervisorInput').value = '';
-    safeGet('employeeStatusInput').value = 'ACTIVE';
-    safeGet('employeePayTypeInput').value = '';
-    safeGet('employeeStandardHoursInput').value = '';
-    safeGet('employeeBenefitsStatusInput').value = '';
-    safeGet('employeeHireDateInput').value = '';
-    safeGet('employeeNextReviewInput').value = '';
-    safeGet('employeeAnniversaryDateInput').value = '';
-    safeGet('employeeTenureBracketInput').value = '';
-    if (safeGet('atRiskReasonInput')) safeGet('atRiskReasonInput').value = '';
-
-    currentManualAtRiskState = { flagged: false, reason: '' };
-    if (safeGet('impactPlayerReasonInput')) safeGet('impactPlayerReasonInput').value = '';
-    currentManualImpactPlayerState = { flagged: false, reason: '' };
-}
 function setManualAtRiskUi(flagged, reason = '') {
 
     currentManualAtRiskState = {
@@ -2033,7 +2337,15 @@ function startNewEmployee() {
     currentEmployee = null;
     isCreatingEmployee = true;
     applyRolePermissions();
-    resetEmployeeAdminForm();
+    if (typeof resetEmployeeForm === 'function') resetEmployeeForm();
+
+    if (safeGet('atRiskReasonInput')) safeGet('atRiskReasonInput').value = '';
+
+    currentManualAtRiskState = { flagged: false, reason: '' };
+
+    if (safeGet('impactPlayerReasonInput')) safeGet('impactPlayerReasonInput').value = '';
+
+    currentManualImpactPlayerState = { flagged: false, reason: '' };
     ensureDeleteEmployeeButton();
     setText('drawerTitle', 'New Employee');
     setText('drawerSub', 'Create employee record');
@@ -2043,8 +2355,16 @@ function startNewEmployee() {
     safeGet('disciplineHistory').innerHTML = '<div class="empty">Save the employee before adding discipline records.</div>';
     safeGet('meetingsHistory').innerHTML = '<div class="empty">Save the employee before adding meetings.</div>';
     safeGet('ecHistory').innerHTML = '<div class="empty">Save the employee before adding an emergency contact.</div>';
+    if (safeGet('reviewsHistory')) safeGet('reviewsHistory').innerHTML = '<div class="empty">Save the employee before adding reviews.</div>';
+    if (safeGet('incidentHistory')) safeGet('incidentHistory').innerHTML = '<div class="empty">Save the employee before adding incident reports.</div>';
+    if (safeGet('stayInterviewHistory')) safeGet('stayInterviewHistory').innerHTML = '<div class="empty">Save the employee before adding stay interviews.</div>';
+    if (safeGet('docHistory')) safeGet('docHistory').innerHTML = '<div class="empty">Save the employee before uploading documents.</div>';
+    if (safeGet('onboardingChecklist')) safeGet('onboardingChecklist').innerHTML = '<div class="empty">Save the employee before loading onboarding tasks.</div>';
+    if (safeGet('onboardingSummary')) safeGet('onboardingSummary').textContent = '0 of 0 complete';
+    if (safeGet('onboardingProgressBar')) safeGet('onboardingProgressBar').style.width = '0%';
     safeGet('drawerBackdrop')?.classList.add('open');
     safeGet('employeeDrawer')?.classList.add('open');
+    if (typeof loadEmployeeDocuments === 'function') currentEmployee = null;
     switchTab('employee');
 }
 
@@ -2552,14 +2872,14 @@ async function loadEmployeeOnboarding(employeeId) {
             <div style="margin-bottom:16px;">
                 <div style="font-weight:800; font-size:13px; letter-spacing:0.02em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">${esc(section)}</div>
                 ${items.map(row => {
-                    const done = row.status === 'Completed';
-                    const metaText = done
-                        ? `Completed${row.completed_at ? ` • ${new Date(row.completed_at).toLocaleDateString()}` : ''}`
-                        : row.due_date
-                            ? `Due ${row.due_date}`
-                            : 'Pending';
+            const done = row.status === 'Completed';
+            const metaText = done
+                ? `Completed${row.completed_at ? ` • ${new Date(row.completed_at).toLocaleDateString()}` : ''}`
+                : row.due_date
+                    ? `Due ${row.due_date}`
+                    : 'Pending';
 
-                    return `
+            return `
                         <div class="history-item" style="margin-bottom:10px; border-left:4px solid ${done ? '#10b981' : '#3b82f6'};">
                             <div class="history-top">
                                 <div>
@@ -2579,7 +2899,7 @@ async function loadEmployeeOnboarding(employeeId) {
                             </div>
                         </div>
                     `;
-                }).join('')}
+        }).join('')}
             </div>
         `).join('');
 
@@ -2607,6 +2927,56 @@ async function markOnboardingComplete(id) {
 
     showToast('Marked complete');
     loadEmployeeOnboarding(currentEmployee.id);
+}
+
+async function convertCandidate(candidate) {
+
+    const newId = generateEmployeeId();
+
+    const { error } = await supabaseClient
+
+        .from('employees')
+
+        .insert([{
+
+            id: newId,
+
+            first_name: candidate.first_name,
+
+            last_name: candidate.last_name,
+
+            department: candidate.department,
+
+            position: candidate.position,
+
+            status: 'ACTIVE',
+
+            hire_date: new Date().toISOString().split('T')[0]
+
+        }]);
+
+    if (error) {
+
+        console.error(error);
+
+        showToast('Conversion failed', 'error');
+
+        return;
+
+    }
+
+    await supabaseClient
+
+        .from('candidates')
+
+        .update({ status: 'Hired' })
+
+        .eq('id', candidate.id);
+
+    showToast('Converted to employee');
+
+    await loadEmployees();
+
 }
 
 async function deleteEmergencyContact() {

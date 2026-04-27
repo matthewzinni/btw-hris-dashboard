@@ -1,4 +1,5 @@
 async function ecFetchByEmployee(employeeId) {
+    if (!employeeId) return { data: [], error: null };
     if (typeof getEmergencyContact === 'function') {
         return await getEmergencyContact(employeeId);
     }
@@ -12,6 +13,7 @@ async function ecFetchByEmployee(employeeId) {
 }
 
 async function ecCreate(payload) {
+    if (!payload?.employee_id) return { data: null, error: new Error('Missing employee ID for emergency contact.') };
     if (typeof createEmergencyContact === 'function') {
         return await createEmergencyContact(payload);
     }
@@ -21,6 +23,7 @@ async function ecCreate(payload) {
 }
 
 async function ecUpdate(id, payload) {
+    if (!id || !payload?.employee_id) return { data: null, error: new Error('Missing emergency contact ID or employee ID.') };
     if (typeof updateEmergencyContactById === 'function') {
         return await updateEmergencyContactById(id, payload.employee_id, payload);
     }
@@ -31,6 +34,7 @@ async function ecUpdate(id, payload) {
 }
 
 async function ecDelete(id) {
+    if (!id) return { data: null, error: new Error('Missing emergency contact ID.') };
     if (typeof deleteEmergencyContactById === 'function') {
         return await deleteEmergencyContactById(id);
     }
@@ -59,6 +63,11 @@ async function loadEmergencyContacts(employeeId) {
     if (!target) return;
 
     const actualEmployeeId = getResolvedEmergencyEmployeeId(employeeId);
+    if (!actualEmployeeId) {
+        resetEmergencyContactForm();
+        target.innerHTML = '<div class="empty">No employee selected.</div>';
+        return;
+    }
     const { data, error } = await ecFetchByEmployee(actualEmployeeId);
 
     if (error) {
@@ -129,8 +138,11 @@ async function loadEmergencyContacts(employeeId) {
             if (safeGet('ecPhone')) safeGet('ecPhone').value = row.phone || '';
             if (safeGet('ecAltPhone')) safeGet('ecAltPhone').value = row.alternate_phone || '';
             if (safeGet('ecNotes')) safeGet('ecNotes').value = row.notes || '';
+            target.querySelectorAll('[data-ec-id]').forEach(item => {
+                item.style.border = '';
+            });
+            card.style.border = '1px solid var(--blue, #2e75b6)';
             applyRolePermissions();
-            loadEmergencyContacts(actualEmployeeId);
         });
     });
 }
@@ -183,7 +195,8 @@ async function saveEmergencyContact() {
         return;
     }
 
-    showToast(currentEmergencyContactId ? 'Emergency contact updated.' : 'Emergency contact saved.');
+    const wasUpdating = Boolean(currentEmergencyContactId);
+    showToast(wasUpdating ? 'Emergency contact updated.' : 'Emergency contact saved.');
     resetEmergencyContactForm();
     await loadEmergencyContacts(employeeId);
 }
@@ -193,6 +206,7 @@ async function deleteEmergencyContact() {
         showToast('No emergency contact to delete.', 'error');
         return;
     }
+    const employeeId = getResolvedEmergencyEmployeeId();
 
     if (!confirm('Are you sure you want to delete this emergency contact?')) {
         return;
@@ -211,7 +225,6 @@ async function deleteEmergencyContact() {
 
         resetEmergencyContactForm();
 
-        const employeeId = getResolvedEmergencyEmployeeId();
         if (employeeId) {
             await loadEmergencyContacts(employeeId);
         }

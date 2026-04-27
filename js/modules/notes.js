@@ -1,11 +1,13 @@
-
+function getResolvedNoteEmployeeId(employeeId = null) {
+    return currentEmployee?.dbId || currentEmployee?.id || employeeId;
+}
 
 function startNoteEdit(note) {
     resetDrawerForms();
     currentNoteId = note.id;
-    safeGet('noteDate').value = note.note_date || todayInputValue();
-    safeGet('noteType').value = note.note_type || '';
-    safeGet('noteText').value = note.note_text || '';
+    if (safeGet('noteDate')) safeGet('noteDate').value = note.note_date || todayInputValue();
+    if (safeGet('noteType')) safeGet('noteType').value = note.note_type || '';
+    if (safeGet('noteText')) safeGet('noteText').value = note.note_text || '';
     if (safeGet('saveNoteBtn')) safeGet('saveNoteBtn').textContent = 'Update Note';
     safeGet('cancelNoteEditBtn')?.classList.remove('hidden');
     safeGet('noteEditStatus')?.classList.remove('hidden');
@@ -24,6 +26,12 @@ function cancelNoteEdit() {
 
 async function saveEmployeeNote() {
     if (!currentEmployee) return;
+
+    const employeeId = getResolvedNoteEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
 
     const note_date = safeGet('noteDate')?.value || '';
     const note_type = safeGet('noteType')?.value || '';
@@ -45,14 +53,14 @@ async function saveEmployeeNote() {
                 note_text,
             })
             .eq('id', currentNoteId)
-            .eq('employee_id', currentEmployee.id);
+            .eq('employee_id', employeeId);
 
         error = result.error;
     } else {
         const result = await supabaseClient
             .from('employee_notes')
             .insert([{
-                employee_id: currentEmployee.id,
+                employee_id: employeeId,
                 note_date,
                 note_type,
                 note_text,
@@ -69,11 +77,20 @@ async function saveEmployeeNote() {
 
     showToast(currentNoteId ? 'Note updated.' : 'Note saved.');
     cancelNoteEdit();
-    await loadEmployeeNotes(currentEmployee.id);
-    await loadRecentActivity();
+    await loadEmployeeNotes(employeeId);
+    switchTab('notes');
+    if (typeof loadRecentActivity === 'function') await loadRecentActivity();
+    if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
+    if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
 }
 
 async function deleteNote(noteId) {
+    const employeeId = getResolvedNoteEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
+
     if (!confirm('Delete this note?')) return;
 
     const { data: deletedRows, error } = await supabaseClient
@@ -98,18 +115,24 @@ async function deleteNote(noteId) {
     }
 
     showToast('Note deleted.');
-    await loadEmployeeNotes(currentEmployee.id);
-    await loadRecentActivity();
+    await loadEmployeeNotes(employeeId);
+    switchTab('notes');
+    if (typeof loadRecentActivity === 'function') await loadRecentActivity();
+    if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
+    if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
 }
 
 async function loadEmployeeNotes(employeeId) {
+    const actualEmployeeId = getResolvedNoteEmployeeId(employeeId);
+    if (!actualEmployeeId) return;
+
     const target = safeGet('notesHistory');
     if (!target) return;
 
     const { data, error } = await supabaseClient
         .from('employee_notes')
         .select('*')
-        .eq('employee_id', String(employeeId))
+        .eq('employee_id', actualEmployeeId)
         .order('note_date', { ascending: false });
 
     if (error) {
@@ -157,6 +180,7 @@ async function loadEmployeeNotes(employeeId) {
 // =========================
 // GLOBAL EXPORTS
 // =========================
+window.getResolvedNoteEmployeeId = getResolvedNoteEmployeeId;
 window.startNoteEdit = startNoteEdit;
 window.cancelNoteEdit = cancelNoteEdit;
 window.saveEmployeeNote = saveEmployeeNote;

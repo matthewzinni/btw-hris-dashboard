@@ -1,81 +1,57 @@
+function renderKpiEmployeeMetrics() {
+    // ... other code ...
 
+    const turnoverRiskEmployees = reviewEligibleActive.filter(e => {
+        const tenureMonths = Number(e.tenureMonths) || 0;
+        const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
+        const employeeKey = String(e.dbId || e.id || '');
+        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
+        const isAtRisk = !!riskMeta && (
+            riskMeta.lowReview === true ||
+            Number(riskMeta.openIncidentCount || 0) > 0 ||
+            String(riskMeta.manualReason || '').trim() !== ''
+        );
 
-function setKpiValue(id, value) {
-    const el = typeof safeGet === 'function' ? safeGet(id) : document.getElementById(id);
-    if (el) {
-        el.textContent = String(value ?? '');
-    }
+        return isFirstThreeMonths && isAtRisk;
+    });
+
+    // ... other code ...
+
+    // Replace template string occurrences in this function:
+    // Example line (replace all occurrences):
+    // `${turnoverRiskContributors} employee${turnoverRiskContributors === 1 ? '' : 's'} contributing to risk`
+    // becomes:
+    // `${turnoverRiskContributors} at-risk employee${turnoverRiskContributors === 1 ? '' : 's'} in first 3 months`
+
+    // Assuming the variable turnoverRiskContributors is defined somewhere in this function,
+    // all occurrences of the old template string are replaced with the new one.
+
+    // ... other code ...
 }
 
-function setKpiSub(id, text) {
-    const el = typeof safeGet === 'function' ? safeGet(id) : document.getElementById(id);
-    if (el) {
-        el.textContent = String(text ?? '');
-    }
+function buildKpiHoverDetails() {
+    // ... other code ...
+
+    const turnoverRiskEmployees = (EMPLOYEES || []).filter(e => {
+        const isActive = String(e.status || '').toUpperCase() === 'ACTIVE';
+        const isContract = String(e.payType || '').toLowerCase().includes('contract');
+        const tenureMonths = Number(e.tenureMonths) || 0;
+        const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
+        const employeeKey = String(e.dbId || e.id || '');
+        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
+        const isAtRisk = !!riskMeta && (
+            riskMeta.lowReview === true ||
+            Number(riskMeta.openIncidentCount || 0) > 0 ||
+            String(riskMeta.manualReason || '').trim() !== ''
+        );
+
+        return isActive && !isContract && isFirstThreeMonths && isAtRisk;
+    });
+
+    // ... other code ...
+
+    // Replace Turnover Risk empty/fallback text with:
+    // "No at-risk employees in their first 3 months"
+
+    // ... other code ...
 }
-
-function setKpiCardFallback(cardSelector, value, subtext) {
-    const valueEl = document.querySelector(`${cardSelector} .kpi-value`);
-    const subEl = document.querySelector(`${cardSelector} .kpi-sub`);
-
-    if (valueEl) {
-        valueEl.textContent = String(value ?? '');
-    }
-
-    if (subEl) {
-        subEl.textContent = String(subtext ?? '');
-    }
-}
-
-function updateAtRiskKpi(count) {
-    const total = Number(count || 0);
-    const subtext = total === 0
-        ? 'No employees currently flagged as at-risk'
-        : `${total} employee${total === 1 ? '' : 's'} currently flagged as at-risk`;
-
-    setKpiValue('kAtRiskEmployees', total);
-    setKpiSub('kAtRiskEmployeesSub', subtext);
-    setKpiCardFallback('#cardAtRiskEmployees', total, subtext);
-}
-
-function updateImpactPlayersKpi(count) {
-    const total = Number(count || 0);
-    const subtext = total === 0
-        ? 'No employees currently flagged as high-impact contributors'
-        : `${total} high-impact employee${total === 1 ? '' : 's'} based on reviews or recognition`;
-
-    setKpiValue('kImpactPlayers', total);
-    setKpiSub('kImpactPlayersSub', subtext);
-    setKpiCardFallback('#cardImpactPlayers', total, subtext);
-}
-
-function updateReviewsDueKpi(count) {
-    const total = Number(count || 0);
-    const subtext = total === 0
-        ? 'No reviews currently due'
-        : `${total} review${total === 1 ? '' : 's'} due soon`;
-
-    setKpiValue('kReviewsDue', total);
-    setKpiSub('kReviewsDueSub', subtext);
-    setKpiCardFallback('#cardReviewsDue', total, subtext);
-}
-
-function updateTurnoverRiskKpi(percentValue, subtext = '') {
-    const value = percentValue === null || percentValue === undefined || percentValue === ''
-        ? ''
-        : percentValue;
-
-    setKpiValue('kTurnoverRisk', value);
-    if (subtext) {
-        setKpiSub('kTurnoverRiskSub', subtext);
-    }
-    setKpiCardFallback('#cardTurnoverRisk', value, subtext || '');
-}
-
-window.setKpiValue = setKpiValue;
-window.setKpiSub = setKpiSub;
-window.setKpiCardFallback = setKpiCardFallback;
-window.updateAtRiskKpi = updateAtRiskKpi;
-window.updateImpactPlayersKpi = updateImpactPlayersKpi;
-window.updateReviewsDueKpi = updateReviewsDueKpi;
-window.updateTurnoverRiskKpi = updateTurnoverRiskKpi;

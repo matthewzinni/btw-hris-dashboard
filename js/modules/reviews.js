@@ -1,15 +1,22 @@
+function getResolvedReviewEmployeeId(employeeId = null) {
+    return currentEmployee?.dbId || currentEmployee?.id || employeeId;
+}
+
 async function reviewGetAll(employeeId) {
+    const targetId = getResolvedReviewEmployeeId(employeeId);
+    if (!targetId) return { data: [], error: null };
     if (typeof window.getEmployeeReviews === 'function') {
-        return await window.getEmployeeReviews(employeeId);
+        return await window.getEmployeeReviews(targetId);
     }
     return await supabaseClient
         .from('employee_reviews')
         .select('*')
-        .eq('employee_id', currentEmployee?.dbId || employeeId)
+        .eq('employee_id', targetId)
         .order('review_date', { ascending: false });
 }
 
 async function reviewCreate(payload) {
+    if (!payload?.employee_id) return { data: null, error: new Error('Missing employee ID for review.') };
     if (typeof window.createEmployeeReview === 'function') {
         return await window.createEmployeeReview(payload);
     }
@@ -19,17 +26,20 @@ async function reviewCreate(payload) {
 }
 
 async function reviewUpdate(reviewId, employeeId, payload) {
+    const targetId = getResolvedReviewEmployeeId(employeeId);
+    if (!reviewId || !targetId) return { data: null, error: new Error('Missing review ID or employee ID.') };
     if (typeof window.updateEmployeeReviewById === 'function') {
-        return await window.updateEmployeeReviewById(reviewId, employeeId, payload);
+        return await window.updateEmployeeReviewById(reviewId, targetId, payload);
     }
     return await supabaseClient
         .from('employee_reviews')
         .update(payload)
         .eq('id', reviewId)
-        .eq('employee_id', currentEmployee?.dbId || employeeId);
+        .eq('employee_id', targetId);
 }
 
 async function reviewDelete(reviewId) {
+    if (!reviewId) return { data: null, error: new Error('Missing review ID.') };
     if (typeof window.deleteEmployeeReviewById === 'function') {
         return await window.deleteEmployeeReviewById(reviewId);
     }
@@ -195,6 +205,8 @@ function buildReviewPayload() {
 }
 
 async function applyAutoImpactFlag(payload) {
+    const employeeId = getResolvedReviewEmployeeId();
+    if (!employeeId) return { autoImpactKey: null, autoImpactMeta: null };
     const avgScore = [
         payload.performance_score,
         payload.attendance_score,
@@ -207,7 +219,7 @@ async function applyAutoImpactFlag(payload) {
         ? avgScore.reduce((a, b) => a + b, 0) / avgScore.length
         : null;
 
-    const autoImpactKey = String(currentEmployee.dbId || currentEmployee.id);
+    const autoImpactKey = String(employeeId);
     const alreadyImpact = currentImpactPlayerRosterMap?.[autoImpactKey]?.highReview === true;
     const autoImpactMeta = average !== null && average >= 3.5
         ? {
@@ -242,14 +254,14 @@ async function applyAutoImpactFlag(payload) {
                 const existingAutoImpact = await supabaseClient
                     .from('employee_notes')
                     .select('id')
-                    .eq('employee_id', currentEmployee.dbId || currentEmployee.id)
+                    .eq('employee_id', employeeId)
                     .eq('note_type', 'Impact Player Flag')
                     .eq('note_text', 'Auto-flagged from high performance review')
                     .limit(1);
 
                 if (!existingAutoImpact.error && !(existingAutoImpact.data || []).length) {
                     await supabaseClient.from('employee_notes').insert([{
-                        employee_id: currentEmployee.dbId || currentEmployee.id,
+                        employee_id: employeeId,
                         note_type: 'Impact Player Flag',
                         note_text: 'Auto-flagged from high performance review',
                         note_date: todayInputValue()
@@ -267,10 +279,12 @@ async function applyAutoImpactFlag(payload) {
 }
 
 async function refreshReviewUi(autoImpactKey, autoImpactMeta) {
+    const employeeId = getResolvedReviewEmployeeId();
+    if (!employeeId) return;
     cancelReviewEdit();
 
     // Core reloads
-    await loadEmployeeReviews(currentEmployee.id);
+    await loadEmployeeReviews(employeeId);
 
     if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
     if (typeof loadRiskEmployees === 'function') await loadRiskEmployees();
@@ -327,7 +341,11 @@ async function refreshReviewUi(autoImpactKey, autoImpactMeta) {
 
 async function saveEmployeeReview() {
     if (!currentEmployee) return;
-
+    const employeeId = getResolvedReviewEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
     const { review_date, payload } = buildReviewPayload();
 
     if (!review_date) {
@@ -338,11 +356,11 @@ async function saveEmployeeReview() {
     let error;
 
     if (currentReviewId) {
-        const result = await reviewUpdate(currentReviewId, currentEmployee.id, payload);
+        const result = await reviewUpdate(currentReviewId, employeeId, payload);
         error = result.error;
     } else {
         const result = await reviewCreate({
-            employee_id: currentEmployee.dbId || currentEmployee.id,
+            employee_id: employeeId,
             created_at: new Date().toISOString(),
             ...payload
         });
@@ -361,6 +379,11 @@ async function saveEmployeeReview() {
 }
 
 async function deleteEmployeeReview(reviewId) {
+    const employeeId = getResolvedReviewEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
     if (!confirm('Delete this review?')) return;
 
     const { error } = await reviewDelete(reviewId);
@@ -375,7 +398,7 @@ async function deleteEmployeeReview(reviewId) {
         cancelReviewEdit();
     }
 
-    const remainingReviewsResult = await reviewGetAll(currentEmployee.id);
+    const remainingReviewsResult = await reviewGetAll(employeeId);
     const remainingReviews = remainingReviewsResult?.data || [];
 
     const stillQualifiesForAutoImpact = remainingReviews.some(row => {
@@ -398,11 +421,11 @@ async function deleteEmployeeReview(reviewId) {
         await supabaseClient
             .from('employee_notes')
             .delete()
-            .eq('employee_id', currentEmployee.dbId || currentEmployee.id)
+            .eq('employee_id', employeeId)
             .eq('note_type', 'Impact Player Flag')
             .eq('note_text', 'Auto-flagged from high performance review');
 
-        const impactKey = String(currentEmployee.dbId || currentEmployee.id);
+        const impactKey = String(employeeId);
         if (currentImpactPlayerRosterMap && currentImpactPlayerRosterMap[impactKey]) {
             const existing = currentImpactPlayerRosterMap[impactKey];
             const isOnlyAutoFlag = !existing.manualReason || existing.manualReason === 'Auto-flagged from high performance review';
@@ -420,7 +443,7 @@ async function deleteEmployeeReview(reviewId) {
         }
     }
     else {
-        const impactKey = String(currentEmployee.dbId || currentEmployee.id);
+        const impactKey = String(employeeId);
         if (currentImpactPlayerRosterMap && currentImpactPlayerRosterMap[impactKey]) {
             currentImpactPlayerRosterMap[impactKey] = {
                 ...currentImpactPlayerRosterMap[impactKey],
@@ -431,10 +454,11 @@ async function deleteEmployeeReview(reviewId) {
     }
 
     showToast('Review deleted.');
-    await loadEmployeeReviews(currentEmployee.id);
+    await loadEmployeeReviews(employeeId);
+    switchTab('reviews');
     if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
 
-    const impactKey = String(currentEmployee.dbId || currentEmployee.id);
+    const impactKey = String(employeeId);
     if (!stillQualifiesForAutoImpact && currentImpactPlayerRosterMap && currentImpactPlayerRosterMap[impactKey]) {
         const existing = currentImpactPlayerRosterMap[impactKey];
         const isOnlyAutoFlag = !existing.manualReason || existing.manualReason === 'Auto-flagged from high performance review';
@@ -455,10 +479,12 @@ async function deleteEmployeeReview(reviewId) {
 }
 
 async function loadEmployeeReviews(employeeId) {
+    const actualEmployeeId = getResolvedReviewEmployeeId(employeeId);
+    if (!actualEmployeeId) return;
     const target = safeGet('reviewsHistory');
     if (!target) return;
 
-    const { data, error } = await reviewGetAll(employeeId);
+    const { data, error } = await reviewGetAll(actualEmployeeId);
 
     if (error) {
         console.error(error);
@@ -634,6 +660,7 @@ if (!document.getElementById('impact-player-glow-style')) {
 // =========================
 // GLOBAL EXPORTS
 // =========================
+window.getResolvedReviewEmployeeId = getResolvedReviewEmployeeId;
 window.startReviewEdit = startReviewEdit;
 window.cancelReviewEdit = cancelReviewEdit;
 window.loadEmployeeReviews = loadEmployeeReviews;

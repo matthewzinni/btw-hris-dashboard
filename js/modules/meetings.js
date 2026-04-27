@@ -1,18 +1,25 @@
+function getResolvedMeetingEmployeeId(employeeId = null) {
+    return currentEmployee?.dbId || currentEmployee?.id || employeeId;
+}
+
 async function meetingFetchByEmployee(employeeId) {
+    const targetId = getResolvedMeetingEmployeeId(employeeId);
+    if (!targetId) return { data: [], error: null };
     if (typeof getEmployeeMeetings === 'function') {
-        return await getEmployeeMeetings(employeeId);
+        return await getEmployeeMeetings(targetId);
     }
     if (typeof window.getEmployeeMeetings === 'function') {
-        return await window.getEmployeeMeetings(employeeId);
+        return await window.getEmployeeMeetings(targetId);
     }
     return await supabaseClient
         .from('employee_meetings')
         .select('*')
-        .eq('employee_id', employeeId)
+        .eq('employee_id', targetId)
         .order('meeting_date', { ascending: false });
 }
 
 async function meetingDeleteById(meetingId) {
+    if (!meetingId) return { data: null, error: new Error('Missing meeting ID.') };
     if (typeof deleteEmployeeMeetingById === 'function') {
         return await deleteEmployeeMeetingById(meetingId);
     }
@@ -36,10 +43,10 @@ function setCurrentMeetingId(value) {
 function startMeetingEdit(meeting) {
     resetDrawerForms();
     setCurrentMeetingId(meeting.id);
-    safeGet('meetingDate').value = meeting.meeting_date || todayInputValue();
-    safeGet('meetingType').value = meeting.meeting_type || '';
-    safeGet('meetingSubject').value = meeting.subject || '';
-    safeGet('meetingNotes').value = meeting.notes || '';
+    if (safeGet('meetingDate')) safeGet('meetingDate').value = meeting.meeting_date || todayInputValue();
+    if (safeGet('meetingType')) safeGet('meetingType').value = meeting.meeting_type || '';
+    if (safeGet('meetingSubject')) safeGet('meetingSubject').value = meeting.subject || '';
+    if (safeGet('meetingNotes')) safeGet('meetingNotes').value = meeting.notes || '';
     if (safeGet('saveMeetingBtn')) safeGet('saveMeetingBtn').textContent = 'Update Meeting';
     safeGet('cancelMeetingEditBtn')?.classList.remove('hidden');
     safeGet('meetingEditStatus')?.classList.remove('hidden');
@@ -58,6 +65,11 @@ function cancelMeetingEdit() {
 }
 
 async function deleteMeetingRecord(meetingId) {
+    const employeeId = getResolvedMeetingEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
     const confirmed = window.confirm('Delete this meeting?');
     if (!confirmed) return;
 
@@ -74,17 +86,20 @@ async function deleteMeetingRecord(meetingId) {
     }
 
     showToast('Meeting deleted.');
-    await loadEmployeeMeetings(currentEmployee.id);
-    await loadSummaryMetrics();
-    await loadRecentActivity();
-    await loadReviewDashboard();
+    await loadEmployeeMeetings(employeeId);
+    switchTab('meetings');
+    if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
+    if (typeof loadRecentActivity === 'function') await loadRecentActivity();
+    if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
 }
 
 async function loadEmployeeMeetings(employeeId) {
+    const actualEmployeeId = getResolvedMeetingEmployeeId(employeeId);
+    if (!actualEmployeeId) return;
     const target = safeGet('meetingsHistory');
     if (!target) return;
 
-    const { data, error } = await meetingFetchByEmployee(employeeId);
+    const { data, error } = await meetingFetchByEmployee(actualEmployeeId);
 
     if (error) {
         console.error(error);
@@ -135,6 +150,11 @@ async function loadEmployeeMeetings(employeeId) {
 
 async function saveMeetingRecord() {
     if (!currentEmployee) return;
+    const employeeId = getResolvedMeetingEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
 
     const meeting_date = safeGet('meetingDate')?.value || '';
     const meeting_type = safeGet('meetingType')?.value || '';
@@ -160,13 +180,13 @@ async function saveMeetingRecord() {
                 notes,
             })
             .eq('id', getCurrentMeetingId())
-            .eq('employee_id', String(currentEmployee.id));
+            .eq('employee_id', employeeId);
         error = result.error;
     } else {
         const result = await supabaseClient
             .from('employee_meetings')
             .insert([{
-                employee_id: String(currentEmployee.id),
+                employee_id: employeeId,
                 meeting_date,
                 meeting_type,
                 subject,
@@ -185,18 +205,21 @@ async function saveMeetingRecord() {
     showToast(getCurrentMeetingId() ? 'Meeting updated.' : 'Meeting saved.');
     setCurrentMeetingId(null);
     if (safeGet('saveMeetingBtn')) safeGet('saveMeetingBtn').textContent = 'Save Meeting';
-    safeGet('meetingDate').value = todayInputValue();
-    safeGet('meetingType').value = '';
-    safeGet('meetingSubject').value = '';
-    safeGet('meetingNotes').value = '';
-    await loadEmployeeMeetings(currentEmployee.id);
-    await loadSummaryMetrics();
-    await loadRecentActivity();
+    if (safeGet('meetingDate')) safeGet('meetingDate').value = todayInputValue();
+    if (safeGet('meetingType')) safeGet('meetingType').value = '';
+    if (safeGet('meetingSubject')) safeGet('meetingSubject').value = '';
+    if (safeGet('meetingNotes')) safeGet('meetingNotes').value = '';
+    await loadEmployeeMeetings(employeeId);
+    switchTab('meetings');
+    if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
+    if (typeof loadRecentActivity === 'function') await loadRecentActivity();
+    if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
 }
 
 // =========================
 // GLOBAL EXPORTS
 // =========================
+window.getResolvedMeetingEmployeeId = getResolvedMeetingEmployeeId;
 window.startMeetingEdit = startMeetingEdit;
 window.cancelMeetingEdit = cancelMeetingEdit;
 window.deleteMeetingRecord = deleteMeetingRecord;

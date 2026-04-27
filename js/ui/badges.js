@@ -91,36 +91,28 @@ function updateEmployeeRowBadges() {
             badgeContainer = document.createElement('div');
 
             badgeContainer.className = 'employee-badges';
+            badgeContainer.style.display = 'flex';
+            badgeContainer.style.flexDirection = 'column';
+            badgeContainer.style.alignItems = 'flex-start';
+            badgeContainer.style.gap = '4px';
+            badgeContainer.style.marginTop = '6px';
 
             row.querySelector('td:nth-child(2)')?.appendChild(badgeContainer);
 
         }
 
-        badgeContainer.innerHTML = '';
+        const riskMeta = getEmployeeRiskMeta(employee);
+        const impactMeta = getEmployeeImpactMeta(employee);
 
-        if (employee.isImpactPlayer) {
+        const riskHtml = buildRiskBadgeHtml(riskMeta);
+        const impactHtml = buildImpactBadgeHtml(impactMeta);
 
-            const badge = document.createElement('span');
-
-            badge.className = 'badge badge-impact';
-
-            badge.textContent = 'Impact Player';
-
-            badgeContainer.appendChild(badge);
-
-        }
-
-        if (employee.isAtRisk) {
-
-            const badge = document.createElement('span');
-
-            badge.className = 'badge badge-risk';
-
-            badge.textContent = 'At-Risk';
-
-            badgeContainer.appendChild(badge);
-
-        }
+        badgeContainer.innerHTML = `${impactHtml}${riskHtml}`;
+        badgeContainer.style.display = 'flex';
+        badgeContainer.style.flexDirection = 'column';
+        badgeContainer.style.alignItems = 'flex-start';
+        badgeContainer.style.gap = '4px';
+        badgeContainer.style.marginTop = '6px';
 
     });
 

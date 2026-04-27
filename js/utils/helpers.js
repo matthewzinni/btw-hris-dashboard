@@ -26,6 +26,19 @@ function nl2br(value) {
   return esc(value).replace(/\n/g, '<br>');
 }
 
+function fmtDateTime(value) {
+  if (!value) return '—';
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+}
+
 function fmtDate(value) {
   if (!value) return '—';
   const date = value instanceof Date ? value : new Date(value);
@@ -49,6 +62,16 @@ function toInputDate(value) {
 
 function todayInputValue() {
   return toInputDate(new Date());
+}
+
+function getCurrentEmployeeDisplayName() {
+  if (!currentEmployee) return '';
+  return `${currentEmployee.first || currentEmployee.first_name || ''} ${currentEmployee.last || currentEmployee.last_name || ''}`.trim() || currentEmployee.name || '';
+}
+
+function getCurrentEmployeeDisplayId() {
+  if (!currentEmployee) return '';
+  return currentEmployee.employee_id || currentEmployee.id || currentEmployee.dbId || '';
 }
 
 function statusBadge(status) {
@@ -86,6 +109,14 @@ function printField(label, value) {
       <div style="font-size:14px; line-height:1.5; color:#111;">${value || '&nbsp;'}</div>
     </div>
   `;
+}
+
+function printEmployeeInfo(extraFieldsHTML = '') {
+  return printSection('Employee Information', `
+    ${printField('Employee', esc(getCurrentEmployeeDisplayName()))}
+    ${printField('Employee ID', esc(getCurrentEmployeeDisplayId()))}
+    ${extraFieldsHTML || ''}
+  `);
 }
 
 function printSection(title, contentHTML) {
@@ -246,16 +277,8 @@ function printDiscipline() {
   const action = safeGet('disciplineAction')?.value || '';
   const status = safeGet('disciplineStatus')?.value || '';
 
-  const employeeName = currentEmployee
-    ? `${currentEmployee.first || ''} ${currentEmployee.last || ''}`.trim()
-    : '';
-  const employeeId = currentEmployee?.id || '';
-
   const content = `
-    ${printSection('Employee Information', `
-      ${printField('Employee', esc(employeeName))}
-      ${printField('Employee ID', esc(employeeId))}
-    `)}
+    ${printEmployeeInfo()}
     ${printSection('Discipline Details', `
       ${printField('Incident Date', esc(date))}
       ${printField('Issue Type', esc(type))}
@@ -278,16 +301,8 @@ function printIncident() {
   const followUp = safeGet('incidentFollowUp')?.value || '';
   const status = safeGet('incidentStatus')?.value || '';
 
-  const employeeName = currentEmployee
-    ? `${currentEmployee.first || ''} ${currentEmployee.last || ''}`.trim()
-    : '';
-  const employeeId = currentEmployee?.id || '';
-
   const content = `
-    ${printSection('Employee Information', `
-      ${printField('Employee', esc(employeeName))}
-      ${printField('Employee ID', esc(employeeId))}
-    `)}
+    ${printEmployeeInfo()}
     ${printSection('Incident Details', `
       ${printField('Incident Date', esc(date))}
       ${printField('Incident Type', esc(type))}
@@ -314,15 +329,8 @@ function printStayInterview() {
   const q7 = safeGet('stayQ7')?.value || '';
   const summary = safeGet('stayManagerSummary')?.value || '';
 
-  const employeeName = currentEmployee
-    ? `${currentEmployee.first || ''} ${currentEmployee.last || ''}`.trim()
-    : '';
-  const employeeId = currentEmployee?.id || '';
-
   const content = `
-    ${printSection('Employee Information', `
-      ${printField('Employee', esc(employeeName))}
-      ${printField('Employee ID', esc(employeeId))}
+    ${printEmployeeInfo(`
       ${printField('Interview Date', esc(date))}
       ${printField('Interview Type', esc(type))}
     `)}
@@ -347,16 +355,8 @@ function printMeeting() {
   const subject = safeGet('meetingSubject')?.value || '';
   const notes = safeGet('meetingNotes')?.value || '';
 
-  const employeeName = currentEmployee
-    ? `${currentEmployee.first || ''} ${currentEmployee.last || ''}`.trim()
-    : '';
-  const employeeId = currentEmployee?.id || '';
-
   const content = `
-    ${printSection('Employee Information', `
-      ${printField('Employee', esc(employeeName))}
-      ${printField('Employee ID', esc(employeeId))}
-    `)}
+    ${printEmployeeInfo()}
     ${printSection('Meeting Details', `
       ${printField('Meeting Date', esc(date))}
       ${printField('Meeting Type', esc(type))}
@@ -382,15 +382,8 @@ function printReview() {
   const employeeComments = safeGet('employeeComments')?.value || '';
   const managerComments = safeGet('managerComments')?.value || '';
 
-  const employeeName = currentEmployee
-    ? `${currentEmployee.first || ''} ${currentEmployee.last || ''}`.trim()
-    : '';
-  const employeeId = currentEmployee?.id || '';
-
   const content = `
-    ${printSection('Employee Information', `
-      ${printField('Employee', esc(employeeName))}
-      ${printField('Employee ID', esc(employeeId))}
+    ${printEmployeeInfo(`
       ${printField('Review Date', esc(date))}
       ${printField('Review Type', esc(type))}
     `)}
@@ -423,12 +416,16 @@ window.setHTML = setHTML;
 window.esc = esc;
 window.nl2br = nl2br;
 window.fmtDate = fmtDate;
+window.fmtDateTime = fmtDateTime;
 window.toInputDate = toInputDate;
 window.todayInputValue = todayInputValue;
+window.getCurrentEmployeeDisplayName = getCurrentEmployeeDisplayName;
+window.getCurrentEmployeeDisplayId = getCurrentEmployeeDisplayId;
 window.statusBadge = statusBadge;
 window.compareText = compareText;
 window.showToast = showToast;
 window.printField = printField;
+window.printEmployeeInfo = printEmployeeInfo;
 window.printSection = printSection;
 window.printRecord = printRecord;
 window.printNote = printNote;

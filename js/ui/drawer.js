@@ -1,3 +1,7 @@
+function getResolvedDrawerEmployeeId(employee = null) {
+    return employee?.dbId || employee?.id || currentEmployee?.dbId || currentEmployee?.id || null;
+}
+
 function openDrawer(employee) {
     if (!employee) return;
 
@@ -7,6 +11,9 @@ function openDrawer(employee) {
 
     currentEmployee = employee;
     isCreatingEmployee = false;
+
+    const employeeId = getResolvedDrawerEmployeeId(employee);
+    if (!employeeId) return;
 
     if (typeof applyRolePermissions === 'function') {
         applyRolePermissions();
@@ -21,8 +28,8 @@ function openDrawer(employee) {
         setText('drawerSub', `${esc(employee.position || 'Employee')} • ${esc(employee.dept || 'No department')}`);
     }
 
-    if (typeof populateEmployeeAdminForm === 'function') {
-        populateEmployeeAdminForm(employee);
+    if (typeof populateEmployeeForm === 'function') {
+        populateEmployeeForm(employee);
     }
 
     if (typeof ensureDeleteEmployeeButton === 'function') {
@@ -30,7 +37,7 @@ function openDrawer(employee) {
     }
 
     const detailRows = [
-        ['Employee ID', employee.id],
+        ['Employee ID', employee.id || employee.employee_id || employeeId],
         ['Status', employee.status],
         ['Department', employee.dept],
         ['Position', employee.position],
@@ -64,26 +71,30 @@ function openDrawer(employee) {
     setLoading('notesHistory', 'Loading notes...');
     setLoading('disciplineHistory', 'Loading discipline history...');
     setLoading('meetingsHistory', 'Loading meetings...');
+    setLoading('incidentsHistory', 'Loading incidents...');
     setLoading('ecHistory', 'Loading emergency contact...');
     setLoading('docHistory', 'Loading documents...');
     setLoading('reviewsHistory', 'Loading reviews...');
+    setLoading('stayInterviewsHistory', 'Loading stay interviews...');
+    setLoading('onboardingHistory', 'Loading onboarding...');
 
     const backdrop = typeof safeGet === 'function' ? safeGet('drawerBackdrop') : document.getElementById('drawerBackdrop');
     const drawer = typeof safeGet === 'function' ? safeGet('employeeDrawer') : document.getElementById('employeeDrawer');
     backdrop?.classList.add('open');
     drawer?.classList.add('open');
 
-    if (typeof loadEmployeeNotes === 'function') loadEmployeeNotes(employee.id);
-    if (typeof loadEmployeeDiscipline === 'function') loadEmployeeDiscipline(employee.id);
-    if (typeof loadEmployeeMeetings === 'function') loadEmployeeMeetings(employee.id);
-    if (typeof loadEmergencyContacts === 'function') loadEmergencyContacts(employee.id);
-    if (typeof loadEmployeeDocuments === 'function') loadEmployeeDocuments(employee.id);
-    if (typeof loadEmployeeReviews === 'function') loadEmployeeReviews(employee.id);
-    if (typeof loadEmployeeIncidents === 'function') loadEmployeeIncidents(employee.id);
-    if (typeof loadStayInterviews === 'function') loadStayInterviews(employee.id);
-    if (typeof loadEmployeeOnboarding === 'function') loadEmployeeOnboarding(employee.id);
-    if (typeof loadEmployeeManualAtRisk === 'function') loadEmployeeManualAtRisk(employee.id);
-    if (typeof loadEmployeeManualImpactPlayer === 'function') loadEmployeeManualImpactPlayer(employee.id);
+    if (typeof loadEmployeeNotes === 'function') loadEmployeeNotes(employeeId);
+    if (typeof loadEmployeeDiscipline === 'function') loadEmployeeDiscipline(employeeId);
+    if (typeof loadEmployeeMeetings === 'function') loadEmployeeMeetings(employeeId);
+    if (typeof loadEmergencyContacts === 'function') loadEmergencyContacts(employeeId);
+    if (typeof loadEmployeeDocuments === 'function') loadEmployeeDocuments(employeeId);
+    if (typeof loadEmployeeReviews === 'function') loadEmployeeReviews(employeeId);
+    if (typeof loadEmployeeIncidents === 'function') loadEmployeeIncidents(employeeId);
+    if (typeof loadStayInterviews === 'function') loadStayInterviews(employeeId);
+    if (typeof loadEmployeeOnboarding === 'function') loadEmployeeOnboarding(employeeId);
+    if (typeof loadEmployeeManualAtRisk === 'function') loadEmployeeManualAtRisk(employeeId);
+    if (typeof loadEmployeeManualImpactPlayer === 'function') loadEmployeeManualImpactPlayer(employeeId);
+    if (typeof loadEmployeeHistory === 'function') loadEmployeeHistory(employeeId);
 
     const markAtRiskBtn = typeof safeGet === 'function' ? safeGet('markAtRiskBtn') : document.getElementById('markAtRiskBtn');
     const clearAtRiskBtn = typeof safeGet === 'function' ? safeGet('clearAtRiskBtn') : document.getElementById('clearAtRiskBtn');
@@ -105,6 +116,10 @@ function closeDrawer() {
     drawer?.classList.remove('open');
 
     currentEmployee = null;
+
+    if (typeof resetDrawerForms === 'function') {
+        resetDrawerForms();
+    }
 }
 
 function switchDrawerTab(tabName) {
@@ -125,17 +140,18 @@ function switchDrawerTab(tabName) {
 function bindDrawerEvents() {
     const closeBtn = document.getElementById('drawerClose');
     if (closeBtn) {
-        closeBtn.addEventListener('click', closeDrawer);
+        closeBtn.onclick = closeDrawer;
     }
 
     document.querySelectorAll('.tab-btn').forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.onclick = () => {
             const tabName = tab.dataset.tab;
-            switchDrawerTab(tabName);
-        });
+            if (tabName) switchDrawerTab(tabName);
+        };
     });
 }
 
+window.getResolvedDrawerEmployeeId = getResolvedDrawerEmployeeId;
 window.openDrawer = openDrawer;
 window.closeDrawer = closeDrawer;
 window.switchDrawerTab = switchDrawerTab;

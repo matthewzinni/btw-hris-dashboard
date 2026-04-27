@@ -6,10 +6,13 @@ async function disciplineFetchByEmployee(employeeId) {
     if (typeof window.getEmployeeDiscipline === 'function') {
         return await window.getEmployeeDiscipline(employeeId);
     }
+    const targetId = currentEmployee?.dbId || employeeId;
+    if (!targetId) return { data: [], error: null };
+
     return await supabaseClient
         .from('discipline_reports')
         .select('*')
-        .eq('employee_id', currentEmployee?.dbId || employeeId)
+        .eq('employee_id', targetId)
         .order('incident_date', { ascending: false });
 }
 
@@ -76,13 +79,14 @@ async function deleteDisciplineRecord(recordId) {
     if (typeof window.recordAuditEvent === 'function') {
         window.recordAuditEvent('Deleted Discipline Report', currentEmployee, `Record ID: ${recordId}`);
     }
-    await loadEmployeeDiscipline(currentEmployee.id);
+    await loadEmployeeDiscipline(currentEmployee?.dbId || currentEmployee?.id);
     await loadSummaryMetrics();
     await loadRecentActivity();
     await loadReviewDashboard();
 }
 
 async function loadEmployeeDiscipline(employeeId) {
+    if (!employeeId) return;
     const target = safeGet('disciplineHistory');
     if (!target) return;
 
@@ -144,6 +148,12 @@ async function loadEmployeeDiscipline(employeeId) {
 async function saveDisciplineReport() {
     if (!currentEmployee) return;
 
+    const employeeId = currentEmployee?.dbId || currentEmployee?.id;
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
+
     const incident_date = safeGet('disciplineDate')?.value || '';
     const issue_type = safeGet('disciplineType')?.value || '';
     let discipline_level = safeGet('disciplineLevel')?.value || '';
@@ -156,7 +166,7 @@ async function saveDisciplineReport() {
         let escalationQuery = supabaseClient
             .from('discipline_reports')
             .select('id, discipline_level, issue_type, report_status')
-            .eq('employee_id', currentEmployee?.dbId || currentEmployee?.id);
+            .eq('employee_id', employeeId);
 
         if (currentDisciplineReportId) {
             escalationQuery = escalationQuery.neq('id', currentDisciplineReportId);
@@ -247,14 +257,14 @@ async function saveDisciplineReport() {
                 refused_to_sign,
             })
             .eq('id', currentDisciplineReportId)
-            .eq('employee_id', currentEmployee.dbId || currentEmployee.id);
+            .eq('employee_id', employeeId);
         error = result.error;
 
     } else {
         const result = await supabaseClient
             .from('discipline_reports')
             .insert([{
-                employee_id: currentEmployee.dbId || currentEmployee.id,
+                employee_id: employeeId,
                 incident_date,
                 issue_type,
                 discipline_level,

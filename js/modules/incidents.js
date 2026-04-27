@@ -1,12 +1,20 @@
 let currentIncidentId = null;
+function getResolvedIncidentEmployeeId(employeeId = null) {
+    return currentEmployee?.dbId || currentEmployee?.id || employeeId;
+}
 async function saveIncidentReport() {
     if (!currentEmployee) {
         showToast('No employee selected.', 'error');
         return;
     }
+    const employeeId = getResolvedIncidentEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
 
     const payload = {
-        employee_id: currentEmployee.id,
+        employee_id: employeeId,
         incident_date: safeGet('incidentDate')?.value || todayInputValue(),
         incident_type: safeGet('incidentType')?.value || '',
         location: safeGet('incidentLocation')?.value || '',
@@ -37,7 +45,8 @@ async function saveIncidentReport() {
     showToast(currentIncidentId ? 'Incident updated.' : 'Incident saved.');
 
     cancelIncidentEdit();
-    await loadEmployeeIncidents(currentEmployee.id);
+    await loadEmployeeIncidents(employeeId);
+    switchTab('incidents');
     if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
     if (typeof loadRecentActivity === 'function') await loadRecentActivity();
     if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
@@ -47,12 +56,12 @@ async function saveIncidentReport() {
 function startIncidentEdit(record) {
     resetDrawerForms();
     currentIncidentId = record.id;
-    safeGet('incidentDate').value = record.incident_date || todayInputValue();
-    safeGet('incidentType').value = record.incident_type || '';
-    safeGet('incidentLocation').value = record.location || '';
-    safeGet('incidentDescription').value = record.description || '';
-    safeGet('incidentFollowUp').value = record.follow_up || '';
-    safeGet('incidentStatus').value = record.status || 'Open';
+    if (safeGet('incidentDate')) safeGet('incidentDate').value = record.incident_date || todayInputValue();
+    if (safeGet('incidentType')) safeGet('incidentType').value = record.incident_type || '';
+    if (safeGet('incidentLocation')) safeGet('incidentLocation').value = record.location || '';
+    if (safeGet('incidentDescription')) safeGet('incidentDescription').value = record.description || '';
+    if (safeGet('incidentFollowUp')) safeGet('incidentFollowUp').value = record.follow_up || '';
+    if (safeGet('incidentStatus')) safeGet('incidentStatus').value = record.status || 'Open';
     if (safeGet('saveIncidentBtn')) safeGet('saveIncidentBtn').textContent = 'Update Incident';
     safeGet('cancelIncidentEditBtn')?.classList.remove('hidden');
     safeGet('incidentEditStatus')?.classList.remove('hidden');
@@ -73,6 +82,11 @@ function cancelIncidentEdit() {
 }
 
 async function deleteIncidentRecord(recordId) {
+    const employeeId = getResolvedIncidentEmployeeId();
+    if (!employeeId) {
+        showToast('No employee selected.', 'error');
+        return;
+    }
     const confirmed = window.confirm('Delete this incident?');
     if (!confirmed) return;
 
@@ -92,20 +106,23 @@ async function deleteIncidentRecord(recordId) {
     }
 
     showToast('Incident deleted.');
-    await loadEmployeeIncidents(currentEmployee.id);
-    await loadSummaryMetrics();
-    await loadRecentActivity();
-    await loadReviewDashboard();
+    await loadEmployeeIncidents(employeeId);
+    switchTab('incidents');
+    if (typeof loadSummaryMetrics === 'function') await loadSummaryMetrics();
+    if (typeof loadRecentActivity === 'function') await loadRecentActivity();
+    if (typeof loadReviewDashboard === 'function') await loadReviewDashboard();
 }
 
 async function loadEmployeeIncidents(employeeId) {
+    const actualEmployeeId = getResolvedIncidentEmployeeId(employeeId);
+    if (!actualEmployeeId) return;
     const target = safeGet('incidentsHistory');
     if (!target) return;
 
     const { data, error } = await supabaseClient
         .from('incident_reports')
         .select('*')
-        .eq('employee_id', employeeId)
+        .eq('employee_id', actualEmployeeId)
         .order('incident_date', { ascending: false })
         .order('created_at', { ascending: false });
 
@@ -158,6 +175,7 @@ async function loadEmployeeIncidents(employeeId) {
 // =========================
 // GLOBAL EXPORTS
 // =========================
+window.getResolvedIncidentEmployeeId = getResolvedIncidentEmployeeId;
 window.startIncidentEdit = startIncidentEdit;
 window.cancelIncidentEdit = cancelIncidentEdit;
 window.deleteIncidentRecord = deleteIncidentRecord;

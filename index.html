@@ -6,6 +6,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BTW Global Orbis</title>
   <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="js/css/styles.css">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
 
@@ -528,6 +529,18 @@
       border-color: #d6e5fb;
     }
 
+    .candidate-interview-alert {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #fef3c7;
+      color: #78350f;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
     .two-col {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -755,7 +768,7 @@
       left: 0;
       right: 0;
       height: 1px;
-      background: linear-gradient(90deg, rgba(255,255,255,0.75), rgba(255,255,255,0.18), rgba(255,255,255,0.75));
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.75), rgba(255, 255, 255, 0.18), rgba(255, 255, 255, 0.75));
       pointer-events: none;
     }
 
@@ -858,6 +871,7 @@
       .select {
         min-width: 100%;
       }
+
     }
   </style>
 </head>
@@ -926,7 +940,12 @@
         </div>
 
         <div class="toolbar-right">
-          <button class="button primary" id="addEmployeeBtn" type="button" onclick="openNewEmployeeForm()">＋ Add Employee</button>
+          <button class="button primary" id="addEmployeeBtn" type="button" onclick="openNewEmployeeForm()">＋ Add
+            Employee</button>
+          <button class="button soft" id="viewCandidatesBtn" type="button"
+            onclick="openCandidatesView()">Candidates</button>
+          <button class="button soft" id="addCandidateBtn" type="button" onclick="openNewCandidateForm()">＋ Add
+            Candidate</button>
           <button class="button soft" id="refreshBtn" type="button" onclick="loadAllDashboardData()">Refresh</button>
           <button class="button soft" id="clearFiltersBtn" type="button" onclick="clearFilters()">Clear Filters</button>
           <button class="button danger" id="logoutBtn" type="button" onclick="signOut()">Log Out</button>
@@ -934,7 +953,7 @@
       </div>
 
       <div class="kpi-grid">
-          <div class="kpi-card" id="cardActiveHC" onmouseenter="buildKpiHoverDetails()">
+        <div class="kpi-card" id="cardActiveHC" onmouseenter="buildKpiHoverDetails()">
           <div class="kpi-label">Active Headcount</div>
           <div class="kpi-value" id="kActiveHC">—</div>
           <div class="kpi-sub">Live workforce snapshot</div>
@@ -995,6 +1014,32 @@
 
       <div class="layout">
         <div class="stack">
+          <div class="card" id="candidatesCard">
+            <div class="card-header">
+              <span>Candidate Pipeline</span>
+              <span class="muted" id="candidateCount">Loading candidates...</span>
+            </div>
+            <div class="card-body">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Name</th>
+                      <th>Position</th>
+                      <th>Stage</th>
+                      <th>Source</th>
+                      <th>Applied Date</th>
+                    </tr>
+                  </thead>
+                  <tbody id="candidateBody">
+                    <tr>
+                      <td colspan="5" class="empty">Loading candidates...</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
           <div class="card">
             <div class="card-header">
               <span>Employee Roster</span>
@@ -1118,6 +1163,108 @@
       </div>
       <div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
 
+      <aside class="drawer" id="candidateDrawer">
+        <div class="drawer-header">
+          <div>
+            <h2 class="drawer-title" id="candidateDrawerTitle">Candidate</h2>
+            <div class="drawer-sub" id="candidateDrawerSub">Candidate Profile</div>
+          </div>
+          <button class="drawer-close" type="button" onclick="closeCandidateDrawer()">Close</button>
+        </div>
+
+        <div class="drawer-body">
+          <div class="tabs">
+            <button class="tab-btn active" data-candidate-tab="profile" type="button"
+              onclick="switchCandidateTab('profile')">Profile</button>
+            <button class="tab-btn" data-candidate-tab="notes" type="button"
+              onclick="switchCandidateTab('notes')">Notes</button>
+          </div>
+
+          <section class="tab-panel active" id="candidate-tab-profile">
+            <div class="card">
+              <div class="card-header">Candidate Record</div>
+              <div class="card-body">
+                <div class="two-col">
+                  <div class="field">
+                    <label for="candidateFirstNameInput">First Name</label>
+                    <input id="candidateFirstNameInput" type="text" placeholder="First name" />
+                  </div>
+                  <div class="field">
+                    <label for="candidateLastNameInput">Last Name</label>
+                    <input id="candidateLastNameInput" type="text" placeholder="Last name" />
+                  </div>
+
+                  <div class="field">
+                    <label for="candidateEmailInput">Email</label>
+                    <input id="candidateEmailInput" type="email" placeholder="Email" />
+                  </div>
+                  <div class="field">
+                    <label for="candidatePhoneInput">Phone</label>
+                    <input id="candidatePhoneInput" type="text" placeholder="Phone" />
+                  </div>
+
+                  <div class="field">
+                    <label for="candidatePositionInput">Position</label>
+                    <input id="candidatePositionInput" type="text" placeholder="Position" />
+                  </div>
+                  <div class="field">
+                    <label for="candidateDepartmentInput">Department</label>
+                    <input id="candidateDepartmentInput" type="text" placeholder="Department" />
+                  </div>
+
+                  <div class="field">
+                    <label for="candidateStageInput">Stage</label>
+                    <select id="candidateStageInput">
+                      <option value="Applied">Applied</option>
+                      <option value="Screening">Screening</option>
+                      <option value="Interviewing">Interviewing</option>
+                      <option value="Offer">Offer</option>
+                      <option value="Hired">Hired</option>
+                      <option value="Rejected">Rejected</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label for="candidateSourceInput">Source</label>
+                    <input id="candidateSourceInput" type="text" placeholder="Indeed, Referral, etc." />
+                  </div>
+
+                  <div class="field">
+                    <label for="candidateAppliedDateInput">Applied Date</label>
+                    <input id="candidateAppliedDateInput" type="date" />
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label for="candidateNotesInput">Candidate Notes</label>
+                  <textarea id="candidateNotesInput" rows="6"
+                    placeholder="Interview notes, comments, observations..."></textarea>
+                </div>
+
+                <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+                  <button class="button primary" id="saveCandidateBtn" type="button"
+                    onclick="saveCandidateRecord()">Save Candidate</button>
+                  <button class="button soft" type="button" onclick="openNewCandidateForm()">New Candidate</button>
+                  <button class="button danger" id="deleteCandidateBtn" type="button"
+                    onclick="deleteCandidateRecord()">Delete Candidate</button>
+                  <button class="button soft" id="convertCandidateFromDrawerBtn" type="button"
+                    onclick="convertCurrentCandidateToEmployee()">Convert to Employee</button>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="tab-panel" id="candidate-tab-notes">
+            <div class="card">
+              <div class="card-header">Candidate Notes</div>
+              <div class="card-body">
+                <div id="candidateNotesPreview" class="history-list">
+                  <div class="empty">Candidate notes will appear here.</div>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </aside>
       <aside class="drawer" id="employeeDrawer">
         <div class="drawer-header">
           <div>
@@ -1142,9 +1289,11 @@
             <button class="tab-btn" data-tab="reviews" type="button" onclick="switchTab('reviews')">Reviews</button>
             <button class="tab-btn" data-tab="emergency" type="button"
               onclick="switchTab('emergency')">Emergency</button>
-            <button class="tab-btn" data-tab="onboarding" type="button" onclick="switchTab('onboarding')">Onboarding</button>
+            <button class="tab-btn" data-tab="onboarding" type="button"
+              onclick="switchTab('onboarding')">Onboarding</button>
             <button class="tab-btn" data-tab="documents" type="button"
               onclick="switchTab('documents')">Documents</button>
+            <button class="tab-btn" data-tab="history" type="button" onclick="switchTab('history')">History</button>
             <button class="tab-btn" data-tab="employee" type="button" onclick="switchTab('employee')">Employee
               Admin</button>
           </div>
@@ -1257,12 +1406,15 @@
                   </div>
 
                   <div class="detail-card" style="margin-top:16px;">
-                    <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">Signature Acknowledgement</div>
+                    <div
+                      style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">
+                      Signature Acknowledgement</div>
                     <label style="display:flex; align-items:center; gap:10px; font-size:14px; color:#344054;">
                       <input type="checkbox" id="disciplineRefusedToSign" />
                       Employee refused to sign
                     </label>
-                    <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+                    <div
+                      style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
                       <div>
                         <div style="border-bottom:1px solid #cbd5e1; height:36px;"></div>
                         <div style="font-size:12px; color:#667085; margin-top:4px;">Employee Signature</div>
@@ -1351,12 +1503,15 @@
                   </div>
 
                   <div class="detail-card" style="margin-top:16px;">
-                    <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">Signature Acknowledgement</div>
+                    <div
+                      style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">
+                      Signature Acknowledgement</div>
                     <label style="display:flex; align-items:center; gap:10px; font-size:14px; color:#344054;">
                       <input type="checkbox" id="incidentRefusedToSign" />
                       Employee refused to sign
                     </label>
-                    <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+                    <div
+                      style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
                       <div>
                         <div style="border-bottom:1px solid #cbd5e1; height:36px;"></div>
                         <div style="font-size:12px; color:#667085; margin-top:4px;">Employee Signature</div>
@@ -1713,12 +1868,15 @@
                   </div>
 
                   <div class="detail-card" style="margin-top:16px;">
-                    <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">Signature Acknowledgement</div>
+                    <div
+                      style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; color:#667085; margin-bottom:10px;">
+                      Signature Acknowledgement</div>
                     <label style="display:flex; align-items:center; gap:10px; font-size:14px; color:#344054;">
                       <input type="checkbox" id="reviewRefusedToSign" />
                       Employee refused to sign
                     </label>
-                    <div style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+                    <div
+                      style="margin-top:14px; display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
                       <div>
                         <div style="border-bottom:1px solid #cbd5e1; height:36px;"></div>
                         <div style="font-size:12px; color:#667085; margin-top:4px;">Employee Signature</div>
@@ -1756,7 +1914,7 @@
                 </div>
               </div>
             </div>
-      </section>
+          </section>
 
           <section class="tab-panel" id="tab-onboarding">
             <div class="card">
@@ -1862,6 +2020,16 @@
             </div>
           </section>
 
+          <section class="tab-panel" id="tab-history">
+            <div class="card">
+              <div class="card-header">Employee History</div>
+              <div class="card-body">
+                <div id="historyFeed" class="history-list">
+                  <div class="empty">No history loaded yet.</div>
+                </div>
+              </div>
+            </div>
+          </section>
           <section class="tab-panel" id="tab-employee">
             <div class="card">
               <div class="card-header">Employee Record Management</div>
@@ -2015,26 +2183,48 @@
     <div id="printContent"></div>
   </div>
 
-  <!-- Utilities (must load first) -->
+  <!-- =====================================================
+       ORBIS SCRIPT LOADING ORDER
+       1. Utilities/helpers
+       2. Services/database clients
+       3. Feature modules
+       4. UI helpers
+       5. Main app bootstrap
+       Keep this order so shared functions exist before modules use them.
+  ====================================================== -->
+
+  <!-- 1. Utilities -->
   <script src="js/utils/helpers.js"></script>
 
-  <!-- Services -->
+  <!-- 2. Services -->
   <script src="js/services/supabaseClient.js"></script>
 
-  <!-- Feature Modules -->
+  <!-- 2.5 Core Modules -->
+  <script src="js/core/auth.js"></script>
+
+  <script src="js/core/employeeForm.js"></script>
+
+  <script src="js/core/employees.js"></script> <!-- 👈 ADD THIS LINE -->
+
+  <script src="js/core/employeeRoster.js"></script>
+
+  <!-- 3. Feature Modules -->
   <script src="js/modules/notes.js"></script>
   <script src="js/modules/meetings.js"></script>
   <script src="js/modules/discipline.js"></script>
   <script src="js/modules/incidents.js"></script>
   <script src="js/modules/reviews.js"></script>
   <script src="js/modules/emergencycontacts.js"></script>
+  <script src="js/modules/candidates.js"></script>
+  <script src="js/modules/onboarding.js"></script>
 
-  <!-- UI Layer -->
+  <!-- 4. UI Layer -->
   <script src="js/ui/badges.js"></script>
   <script src="js/ui/kpis.js"></script>
+  <script src="js/ui/history.js"></script>
   <script src="js/ui/drawer.js"></script>
 
-  <!-- Core App -->
+  <!-- 5. Core App -->
   <script src="js/app.js"></script>
 
 </body>
