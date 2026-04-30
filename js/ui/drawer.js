@@ -15,10 +15,6 @@ function openDrawer(employee) {
     const employeeId = getResolvedDrawerEmployeeId(employee);
     if (!employeeId) return;
 
-    if (typeof applyRolePermissions === 'function') {
-        applyRolePermissions();
-    }
-
     if (typeof switchTab === 'function') {
         switchTab('profile');
     }
@@ -34,6 +30,29 @@ function openDrawer(employee) {
 
     if (typeof ensureDeleteEmployeeButton === 'function') {
         ensureDeleteEmployeeButton();
+    }
+
+    // Safety: make sure the Terminate Employee button exists in the employee action row.
+    // Some older drawer paths create Archive but return before Terminate is appended.
+    if (typeof safeGet === 'function' && typeof runTerminateEmployee === 'function') {
+        const saveBtn = safeGet('saveEmployeeBtn');
+        const newBtn = safeGet('newEmployeeBtn');
+        const actionsRow = (newBtn && newBtn.parentElement) || (saveBtn && saveBtn.parentElement);
+        let terminateBtn = safeGet('terminateEmployeeBtn');
+
+        if (actionsRow && !terminateBtn) {
+            terminateBtn = document.createElement('button');
+            terminateBtn.type = 'button';
+            terminateBtn.id = 'terminateEmployeeBtn';
+            terminateBtn.className = 'button danger';
+            terminateBtn.textContent = 'Terminate Employee';
+            terminateBtn.onclick = () => runTerminateEmployee();
+            actionsRow.appendChild(terminateBtn);
+        }
+    }
+
+    if (typeof applyRolePermissions === 'function') {
+        applyRolePermissions();
     }
 
     const detailRows = [

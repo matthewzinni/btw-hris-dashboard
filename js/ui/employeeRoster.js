@@ -7,10 +7,26 @@ if (typeof currentSort === 'undefined') {
     window.currentSort = { column: 'name', direction: 'asc' };
 }
 
+if (typeof window.rosterViewMode === 'undefined') {
+    window.rosterViewMode = 'active';
+}
+
+
 function formatRosterStatus(status) {
     const value = String(status || '').trim();
     if (!value) return 'Active';
     return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+}
+
+function statusBadge(status) {
+    const normalized = String(status || '').trim().toUpperCase();
+
+    if (normalized === 'ACTIVE') return 'badge badge-active';
+    if (normalized === 'INACTIVE') return 'badge badge-inactive';
+    if (normalized === 'TERMINATED') return 'badge badge-terminated';
+    if (normalized === 'LEAVE') return 'badge badge-leave';
+
+    return 'badge badge-inactive';
 }
 
 function normalizeEmployeeForRoster(employee) {
@@ -1017,8 +1033,9 @@ function getEmployeeSnapshotFromRosterRow(employeeId) {
 
 function getFilteredRosterEmployees() {
     const searchTerm = safeGet('globalSearch')?.value?.toLowerCase().trim() || '';
-    const departmentFilter = safeGet('deptFilter')?.value || '';
-    const statusFilter = safeGet('statusFilter')?.value || '';
+    const departmentFilter = String(safeGet('deptFilter')?.value || '').trim();
+    const explicitStatusFilter = String(safeGet('statusFilter')?.value || '').trim().toUpperCase();
+    const rosterMode = String(window.rosterViewMode || 'active').trim().toLowerCase();
 
     const employees = Array.isArray(EMPLOYEES) ? EMPLOYEES : [];
 
@@ -1037,7 +1054,17 @@ function getFilteredRosterEmployees() {
 
             const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
             const matchesDepartment = !departmentFilter || employee.displayDepartment === departmentFilter;
-            const matchesStatus = !statusFilter || employee.displayStatus === statusFilter;
+            const employeeStatus = String(employee.status || employee.displayStatus || '').trim().toUpperCase();
+
+            let matchesStatus = true;
+
+            if (explicitStatusFilter) {
+                matchesStatus = employeeStatus === explicitStatusFilter;
+            } else if (rosterMode === 'former') {
+                matchesStatus = employeeStatus === 'INACTIVE' || employeeStatus === 'TERMINATED';
+            } else if (rosterMode === 'active') {
+                matchesStatus = employeeStatus === 'ACTIVE';
+            }
 
             return matchesSearch && matchesDepartment && matchesStatus;
         })
@@ -1156,6 +1183,11 @@ function renderEmployeeRoster() {
     if (typeof updateEmployeeRowBadges === 'function') {
         updateEmployeeRowBadges();
     }
+
+    // Re-bind At-Risk KPI hover after roster updates
+    if (typeof bindAtRiskKpiHover === 'function') {
+        bindAtRiskKpiHover();
+    }
 }
 
 function openDrawerByEmployeeId(employeeId) {
@@ -1250,29 +1282,106 @@ async function deleteEmployeeQuick(employeeId) {
     }
 }
 
+function ensureRosterViewTabs() {
+    const statusFilter = safeGet('statusFilter');
+    const rosterControls = statusFilter?.closest('.filters, .toolbar, .controls, .card, div') || statusFilter?.parentElement;
+
+    if (!rosterControls || safeGet('rosterViewTabs')) return;
+
+    const tabs = document.createElement('div');
+    tabs.id = 'rosterViewTabs';
+    tabs.style.display = 'flex';
+    tabs.style.gap = '8px';
+    tabs.style.alignItems = 'center';
+    tabs.style.margin = '8px 0';
+
+    const makeTab = (mode, label) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'mini-btn';
+        button.dataset.rosterMode = mode;
+        button.textContent = label;
+        button.onclick = () => {
+            window.rosterViewMode = mode;
+
+            if (statusFilter) {
+                statusFilter.value = '';
+            }
+
+            Array.from(tabs.querySelectorAll('button')).forEach(btn => {
+                const active = btn.dataset.rosterMode === mode;
+                btn.classList.toggle('active', active);
+                btn.style.fontWeight = active ? '800' : '600';
+                btn.style.borderColor = active ? '#111827' : '';
+            });
+
+            renderEmployeeRoster();
+        };
+        return button;
+    };
+
+    const activeTab = makeTab('active', 'Active Employees');
+    const formerTab = makeTab('former', 'Former Employees');
+
+    tabs.appendChild(activeTab);
+    tabs.appendChild(formerTab);
+
+    rosterControls.appendChild(tabs);
+
+    const defaultTab = window.rosterViewMode === 'former' ? formerTab : activeTab;
+    defaultTab.click();
+}
+
 function bindRosterEvents() {
     bindEmployeeUpdateToast();
+    ensureRosterViewTabs();
     const searchInput = safeGet('globalSearch');
     const departmentFilter = safeGet('deptFilter');
     const statusFilter = safeGet('statusFilter');
     const clearFiltersBtn = safeGet('clearFiltersBtn');
 
     if (searchInput) {
+        searchInput.disabled = false;
+        searchInput.readOnly = false;
+        searchInput.removeAttribute('disabled');
+        searchInput.removeAttribute('readonly');
+        searchInput.style.pointerEvents = 'auto';
+        searchInput.style.userSelect = 'text';
+
+        searchInput.onclick = event => {
+            event.stopPropagation();
+        };
+
+        searchInput.onmousedown = event => {
+            event.stopPropagation();
+        };
+
+        searchInput.onkeydown = event => {
+            event.stopPropagation();
+        };
+
         searchInput.oninput = () => {
             clearTimeout(rosterSearchTimer);
             rosterSearchTimer = setTimeout(renderEmployeeRoster, 150);
         };
     }
     if (departmentFilter) departmentFilter.onchange = renderEmployeeRoster;
-    if (statusFilter) statusFilter.onchange = renderEmployeeRoster;
+    if (statusFilter) {
+        statusFilter.onchange = () => {
+            window.rosterViewMode = 'all';
+            renderEmployeeRoster();
+        };
+    }
 
     if (clearFiltersBtn) {
         clearFiltersBtn.onclick = () => {
             if (searchInput) searchInput.value = '';
             if (departmentFilter) departmentFilter.value = '';
             if (statusFilter) statusFilter.value = '';
+            window.rosterViewMode = 'active';
             currentSort = { column: 'name', direction: 'asc' };
             renderEmployeeRoster();
+            ensureRosterViewTabs();
         };
     }
 }
@@ -1346,6 +1455,7 @@ window.refreshEmployeeRoster = async function () {
 // =========================
 
 window.formatRosterStatus = formatRosterStatus;
+window.statusBadge = statusBadge;
 window.normalizeEmployeeForRoster = normalizeEmployeeForRoster;
 window.getEmployeePublicId = getEmployeePublicId;
 window.populateEmployeeAdminFallback = populateEmployeeAdminFallback;
@@ -1356,6 +1466,7 @@ window.renderEmployeeRoster = renderEmployeeRoster;
 window.openDrawerByEmployeeId = openDrawerByEmployeeId;
 window.deleteEmployeeQuick = deleteEmployeeQuick;
 window.bindRosterEvents = bindRosterEvents;
+window.ensureRosterViewTabs = ensureRosterViewTabs;
 window.lockEmployeeIdField = lockEmployeeIdField;
 window.bindEmployeeUpdateToast = bindEmployeeUpdateToast;
 window.getEmployeeAdminFormSnapshot = getEmployeeAdminFormSnapshot;
@@ -1371,6 +1482,170 @@ window.writeEmployeeAuditLogLocal = writeEmployeeAuditLogLocal;
 window.fetchEmployeeAuditLogs = fetchEmployeeAuditLogs;
 window.getLocalAuditLogsForEmployee = getLocalAuditLogsForEmployee;
 window.renderEmployeeAuditLogViewer = renderEmployeeAuditLogViewer;
+
+setTimeout(() => {
+    const searchInput = safeGet('globalSearch');
+    if (searchInput) {
+        searchInput.disabled = false;
+        searchInput.readOnly = false;
+        searchInput.removeAttribute('disabled');
+        searchInput.removeAttribute('readonly');
+        searchInput.style.pointerEvents = 'auto';
+        searchInput.style.userSelect = 'text';
+    }
+}, 250);
+
+function getAtRiskKpiHoverNames() {
+    const riskMap = window.currentAtRiskRosterMap || (typeof currentAtRiskRosterMap !== 'undefined' ? currentAtRiskRosterMap : {}) || {};
+    const employees = Array.isArray(window.EMPLOYEES) ? window.EMPLOYEES : (Array.isArray(EMPLOYEES) ? EMPLOYEES : []);
+    const names = [];
+
+    const addNameValue = (value) => {
+        if (!value) return;
+
+        if (typeof value === 'string') {
+            const text = value.trim();
+            if (text && text.toLowerCase() !== 'true' && text.toLowerCase() !== 'yes' && !names.includes(text)) {
+                names.push(text);
+            }
+            return;
+        }
+
+        if (typeof value === 'object') {
+            const first = value.first || value.first_name || value.firstName || '';
+            const last = value.last || value.last_name || value.lastName || '';
+            const name = `${first} ${last}`.trim() || value.displayName || value.name || value.employee_name || '';
+            if (name && !names.includes(name)) names.push(name);
+        }
+    };
+
+    Object.values(riskMap || {}).forEach(addNameValue);
+
+    // Fallback: derive from employee data if riskMap is empty
+    if (!names.length && employees.length) {
+        employees.forEach(emp => {
+            const isAtRisk =
+                emp.at_risk === true ||
+                emp.atRisk === true ||
+                String(emp.status || '').toUpperCase() === 'AT-RISK';
+
+            if (isAtRisk) {
+                const name =
+                    emp.displayName ||
+                    `${emp.first_name || emp.firstName || ''} ${emp.last_name || emp.lastName || ''}`.trim();
+
+                if (name && !names.includes(name)) names.push(name);
+            }
+        });
+    }
+
+    // DOM fallback: if the roster row already shows an At-Risk badge, use that row's employee name.
+    document.querySelectorAll('tr.employee-row').forEach(row => {
+        const hasAtRiskBadge = Array.from(row.querySelectorAll('.badge, span')).some(el =>
+            String(el.textContent || '').trim().toLowerCase() === 'at-risk'
+        );
+
+        if (!hasAtRiskBadge) return;
+
+        const rowName = row.querySelector('.link-button')?.textContent?.replace(/At-Risk|Impact/g, '').trim();
+        if (rowName && !names.includes(rowName)) names.push(rowName);
+    });
+
+    if (!names.length) {
+        const riskCount = Number(document.getElementById('kRisk')?.textContent?.trim() || '0');
+        if (riskCount > 0) {
+            return [`${riskCount} employee flagged`];
+        }
+    }
+
+    return names;
+}
+
+function bindAtRiskKpiHover() {
+    const riskElement = document.getElementById('kRisk');
+
+    if (!riskElement) return;
+
+    const riskCard =
+        riskElement.closest('.kpi-card, .card, [class*="kpi"]') ||
+        riskElement.parentElement;
+
+    if (!riskCard) return;
+
+    riskCard.style.position = riskCard.style.position || 'relative';
+
+    let tooltip = document.getElementById('atRiskKpiTooltip');
+    if (!tooltip) {
+        tooltip = document.createElement('div');
+        tooltip.id = 'atRiskKpiTooltip';
+        tooltip.style.position = 'absolute';
+        tooltip.style.left = '12px';
+        tooltip.style.right = '12px';
+        tooltip.style.top = 'calc(100% + 8px)';
+        tooltip.style.zIndex = '9999';
+        tooltip.style.background = '#0f172a';
+        tooltip.style.color = '#ffffff';
+        tooltip.style.borderRadius = '12px';
+        tooltip.style.padding = '10px 12px';
+        tooltip.style.boxShadow = '0 12px 28px rgba(15, 23, 42, 0.28)';
+        tooltip.style.fontSize = '12px';
+        tooltip.style.lineHeight = '1.4';
+        tooltip.style.display = 'none';
+        tooltip.style.pointerEvents = 'none';
+        riskCard.appendChild(tooltip);
+    }
+
+    const getRiskCount = () => {
+        const directCount = Number(String(riskElement.textContent || '').trim());
+        if (!Number.isNaN(directCount)) return directCount;
+
+        const cardText = String(riskCard.textContent || '');
+        const match = cardText.match(/AT-RISK EMPLOYEES\s*(\d+)/i) || cardText.match(/\b(\d+)\b/);
+        return match ? Number(match[1]) : 0;
+    };
+
+    const updateHoverText = () => {
+        const names = getAtRiskKpiHoverNames();
+        const riskCount = getRiskCount();
+
+        let text;
+        if (names.length) {
+            text = `At-Risk Employees: ${names.join(', ')}`;
+        } else if (riskCount > 0) {
+            text = `At-Risk Employees: ${riskCount} employee${riskCount === 1 ? '' : 's'} flagged`;
+        } else {
+            text = 'No employees currently flagged at-risk.';
+        }
+
+        riskElement.title = text;
+        riskCard.title = text;
+        riskCard.setAttribute('data-tooltip', text);
+        riskCard.setAttribute('aria-label', text);
+        tooltip.textContent = text;
+    };
+
+    const showTooltip = () => {
+        updateHoverText();
+        tooltip.style.display = 'block';
+    };
+
+    const hideTooltip = () => {
+        tooltip.style.display = 'none';
+    };
+
+    riskCard.onmouseenter = showTooltip;
+    riskCard.onfocusin = showTooltip;
+    riskCard.onmouseleave = hideTooltip;
+    riskCard.onfocusout = hideTooltip;
+
+    updateHoverText();
+}
+
+window.bindAtRiskKpiHover = bindAtRiskKpiHover;
+
+setTimeout(bindAtRiskKpiHover, 300);
+
+setTimeout(bindAtRiskKpiHover, 1000);
 
 // Initialize audit/update listener immediately in case bindRosterEvents is not called.
 bindEmployeeUpdateToast();

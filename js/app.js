@@ -69,6 +69,7 @@ let currentSort = {
 };
 
 let currentUserRole = 'user';
+let currentUserAccess = null;
 let currentManualAtRiskState = { flagged: false, reason: '' };
 let currentAtRiskRosterMap = {};
 let currentManualImpactPlayerState = { flagged: false, reason: '' };
@@ -131,18 +132,191 @@ function openNewEmployeeForm() {
     applyRolePermissions();
 }
 
+async function deleteEmployeeById(employeeId) {
+    const db = window.supabaseClient || supabaseClient;
+
+    if (!db) {
+        return { error: new Error('Supabase client not available') };
+    }
+
+    const targetId = String(employeeId || '').trim();
+
+    if (!targetId) {
+        return { error: new Error('No employee ID provided') };
+    }
+
+    // Permanent delete: removes the employee record completely.
+    // Termination/archiving is handled separately by runTerminateEmployee().
+    const relatedTables = [
+        'onboarding_tasks',
+        'employee_notes',
+        'employee_meetings',
+        'employee_reviews',
+        'discipline_reports',
+        'incident_reports',
+        'stay_interviews',
+        'emergency_contacts',
+        'employee_audit_log'
+    ];
+
+    for (const table of relatedTables) {
+        const { error } = await db
+            .from(table)
+            .delete()
+            .eq('employee_id', targetId);
+
+        if (error) {
+            console.warn(`Could not delete related rows from ${table}:`, error);
+        }
+    }
+
+    const { error } = await db
+        .from('employees')
+        .delete()
+        .eq('id', targetId);
+
+    if (error) {
+        console.error('Employee delete failed:', error);
+        return { error };
+    }
+
+    return { error: null };
+}
+
+window.deleteEmployeeById = deleteEmployeeById;
+
 async function runDeleteEmployee() {
-    if (typeof deleteEmployeeRecord === 'function') {
-        await deleteEmployeeRecord();
+    if (!currentEmployee) {
+        showToast('Open an employee first.', 'error');
         return;
     }
 
-    if (typeof deleteEmployee === 'function') {
-        return deleteEmployee();
+    const employeeName = `${currentEmployee.first || currentEmployee.first_name || ''} ${currentEmployee.last || currentEmployee.last_name || ''}`.trim() || 'this employee';
+
+    const confirmed = confirm(`Permanently delete ${employeeName}'s employee file? This removes the record completely and cannot be undone.`);
+    if (!confirmed) return;
+
+    const employeeId = currentEmployee.id || currentEmployee.employee_id || currentEmployee.dbId;
+    const { error } = await deleteEmployeeById(employeeId);
+
+    if (error) {
+        showToast(error.message || 'Could not archive employee.', 'error');
+        return;
     }
 
-    showToast('Delete employee function is not available yet.', 'error');
+    recordAuditEvent('Deleted Employee', currentEmployee, 'Employee record permanently deleted.');
+    showToast('Employee deleted permanently.', 'success');
+
+    await loadEmployees();
+    await loadSummaryMetrics();
+    await loadReviewDashboard();
+
+    if (typeof closeDrawer === 'function') {
+        closeDrawer();
+    }
 }
+
+async function runTerminateEmployee() {
+    if (!currentEmployee) {
+        showToast('Open an employee first.', 'error');
+        return;
+    }
+
+    const employeeName = `${currentEmployee.first || currentEmployee.first_name || ''} ${currentEmployee.last || currentEmployee.last_name || ''}`.trim() || 'this employee';
+
+    const confirmed = confirm(`Terminate ${employeeName}? This will mark them as TERMINATED but keep their file.`);
+    if (!confirmed) return;
+
+    const employeeId = currentEmployee.id || currentEmployee.employee_id || currentEmployee.dbId;
+    const targetId = String(employeeId || '').trim();
+    const isUuid = /^[0-9a-f-]{36}$/i.test(targetId);
+
+    let query = supabaseClient
+        .from('employees')
+        .update({
+            // Terminated employees stay in the roster with TERMINATED status so their file is retained,
+            // they do not count toward active headcount, and termination fields remain available for turnover reporting.
+            status: 'TERMINATED',
+            termination_date: new Date().toISOString().slice(0, 10),
+            termination_reason: 'Not specified',
+            notes: currentEmployee.notes
+                ? `${currentEmployee.notes}\n\nTerminated employee file retained for turnover history.`
+                : 'Terminated employee file retained for turnover history.'
+        });
+
+    query = query.eq('id', targetId);
+
+    const { error } = await query;
+
+    if (error) {
+        console.error(error);
+        showToast('Could not terminate employee.', 'error');
+        return;
+    }
+
+    recordAuditEvent('Terminated Employee', currentEmployee, 'Employee marked terminated with file retained for turnover reporting.');
+    showToast('Employee terminated. File retained for turnover reporting.', 'success');
+
+    await loadEmployees();
+    await loadSummaryMetrics();
+    await loadReviewDashboard();
+
+    if (typeof closeDrawer === 'function') {
+        closeDrawer();
+    }
+}
+
+
+window.runTerminateEmployee = runTerminateEmployee;
+
+async function updateEmployeeById(employeeId, payload) {
+    const db = window.supabaseClient || supabaseClient;
+
+    if (!db) {
+        return { data: null, error: new Error('Supabase client not available') };
+    }
+
+    const targetId = String(employeeId || payload?.id || payload?.employee_id || payload?.dbId || '').trim();
+
+    if (!targetId) {
+        return { data: null, error: new Error('No employee ID provided') };
+    }
+
+    const cleanPayload = { ...payload };
+
+    delete cleanPayload.dbId;
+    delete cleanPayload.displayId;
+    delete cleanPayload.displayName;
+    delete cleanPayload.displayStatus;
+    delete cleanPayload.displayStatusLabel;
+    delete cleanPayload.displayDepartment;
+    delete cleanPayload.displayPosition;
+    delete cleanPayload.displaySupervisor;
+    delete cleanPayload.hireDate;
+    delete cleanPayload.nextReview;
+    delete cleanPayload.tenureMonths;
+    delete cleanPayload.tenureYears;
+    delete cleanPayload.payType;
+    delete cleanPayload.benefitsStatus;
+    delete cleanPayload.first;
+    delete cleanPayload.last;
+    delete cleanPayload.dept;
+
+    const { data, error } = await db
+        .from('employees')
+        .update(cleanPayload)
+        .eq('id', targetId)
+        .select();
+
+    if (error) {
+        console.error('Employee update failed:', error);
+        return { data: null, error };
+    }
+
+    return { data: Array.isArray(data) ? data[0] : data, error: null };
+}
+
+window.updateEmployeeById = updateEmployeeById;
 
 // =========================
 // FORM RESET / STATE MANAGEMENT
@@ -417,19 +591,49 @@ function populateEmployeeAdminForm(employee) {
     setField('empNotes', values.notes);
     setField('notes', values.notes);
 
-    const statusSelect = Array.from(document.querySelectorAll('select')).find(select => {
-        return Array.from(select.options || []).some(option => {
-            const optionText = option.textContent.trim().toLowerCase();
-            return optionText === 'active' || optionText === 'inactive' || optionText === 'leave';
+    const drawer = safeGet('employeeDrawer') || document.querySelector('#employeeDrawer');
+
+    const statusSelect =
+        safeGet('empStatus') ||
+        safeGet('status') ||
+        drawer?.querySelector('select#empStatus') ||
+        drawer?.querySelector('select#status') ||
+        Array.from(drawer?.querySelectorAll('select') || []).find(select => {
+            return Array.from(select.options || []).some(option => {
+                const optionText = option.textContent.trim().toLowerCase();
+                return optionText === 'active' || optionText === 'inactive' || optionText === 'leave' || optionText === 'terminated';
+            });
         });
-    });
 
     if (statusSelect) {
-        const normalizedStatus = String(values.status || '').toLowerCase();
-        const matchingOption = Array.from(statusSelect.options || []).find(option => {
-            return option.value.toLowerCase() === normalizedStatus || option.textContent.trim().toLowerCase() === normalizedStatus;
+        const requiredStatuses = [
+            { value: 'ACTIVE', label: 'Active' },
+            { value: 'INACTIVE', label: 'Inactive' },
+            { value: 'LEAVE', label: 'Leave' },
+            { value: 'TERMINATED', label: 'Terminated' }
+        ];
+
+        const existingStatuses = Array.from(statusSelect.options || []).map(option =>
+            String(option.value || option.textContent || '').trim().toUpperCase()
+        );
+
+        requiredStatuses.forEach(statusOption => {
+            if (!existingStatuses.includes(statusOption.value)) {
+                const option = document.createElement('option');
+                option.value = statusOption.value;
+                option.textContent = statusOption.label;
+                statusSelect.appendChild(option);
+            }
         });
-        if (matchingOption) statusSelect.value = matchingOption.value;
+
+        const normalizedStatus = String(values.status || '').trim().toUpperCase();
+        const matchingOption = Array.from(statusSelect.options || []).find(option => {
+            return String(option.value || '').trim().toUpperCase() === normalizedStatus ||
+                String(option.textContent || '').trim().toUpperCase() === normalizedStatus;
+        });
+
+        statusSelect.value = matchingOption ? matchingOption.value : 'ACTIVE';
+        statusSelect.dispatchEvent(new Event('input', { bubbles: true }));
         statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
     }
 }
@@ -469,6 +673,21 @@ async function getUserRole() {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return null;
 
+        const userEmail = String(user.email || '').trim().toLowerCase();
+        currentUserAccess = null;
+
+        const { data: accessRows, error: accessError } = await supabaseClient
+            .from('user_access')
+            .select('email, display_name, role, supervisor_name, can_delete')
+            .eq('email', userEmail)
+            .limit(1);
+
+        if (!accessError && accessRows && accessRows[0]) {
+            currentUserAccess = accessRows[0];
+            const accessRole = String(accessRows[0].role || '').toLowerCase().trim();
+            if (accessRole) return accessRole;
+        }
+
         const { data, error } = await supabaseClient
             .from('profiles')
             .select('hr_role')
@@ -484,6 +703,7 @@ async function getUserRole() {
             .filter(Boolean);
 
         if (roles.includes('admin')) return 'admin';
+        if (roles.includes('supervisor')) return 'supervisor';
         if (roles.includes('user')) return 'user';
         return roles[0] || 'user';
     } catch (err) {
@@ -494,6 +714,28 @@ async function getUserRole() {
 
 function canManageEmployeeRecords() {
     return String(currentUserRole || '').toLowerCase() === 'admin';
+}
+
+function isSupervisorUser() {
+    return String(currentUserRole || '').toLowerCase() === 'supervisor';
+}
+
+function employeeMatchesSupervisorAccess(employee) {
+    if (!isSupervisorUser()) return true;
+
+    const supervisorName = String(currentUserAccess?.supervisor_name || '').trim().toLowerCase();
+    if (!supervisorName) return false;
+
+    const employeeSupervisor = String(employee?.supervisor || employee?.displaySupervisor || '').trim().toLowerCase();
+    if (!employeeSupervisor) return false;
+
+    const compactAccessName = supervisorName.replace(/[^a-z0-9]/g, '');
+    const compactEmployeeSupervisor = employeeSupervisor.replace(/[^a-z0-9]/g, '');
+
+    return employeeSupervisor.includes(supervisorName) ||
+        supervisorName.includes(employeeSupervisor) ||
+        compactEmployeeSupervisor.includes(compactAccessName) ||
+        compactAccessName.includes(compactEmployeeSupervisor);
 }
 function getAuditTrail() {
 
@@ -513,11 +755,86 @@ function getAuditTrail() {
 
 }
 
-function recordAuditEvent(action, employee, details = '') {
+function buildEmployeeChangeLog(oldEmployee, newEmployee) {
 
+    const oldData = normalizeEmployee(oldEmployee || {});
+
+    const newData = normalizeEmployee(newEmployee || {});
+
+    const fields = [
+
+        ['Status', 'status'],
+
+        ['First Name', 'first_name'],
+
+        ['Last Name', 'last_name'],
+
+        ['Department', 'department'],
+
+        ['Position', 'position'],
+
+        ['Supervisor', 'supervisor'],
+
+        ['Pay Type', 'pay_type'],
+
+        ['Standard Hours', 'standard_hours'],
+
+        ['Benefits Status', 'benefits_status'],
+
+        ['Hire Date', 'hire_date'],
+
+        ['Next Review Date', 'next_review_date'],
+
+        ['Anniversary Date', 'anniversary_date'],
+
+        ['Tenure Bracket', 'tenure_bracket'],
+
+        ['Work Email', 'work_email'],
+
+        ['Personal Email', 'personal_email'],
+
+        ['Phone', 'phone']
+
+    ];
+
+    const formatValue = value => {
+
+        const text = String(value ?? '').trim();
+
+        return text || 'Blank';
+
+    };
+
+    return fields
+
+        .map(([label, key]) => {
+
+            const oldValue = formatValue(oldData?.[key]);
+
+            const newValue = formatValue(newData?.[key]);
+
+            return oldValue !== newValue ? `${label}: ${oldValue} → ${newValue}` : '';
+
+        })
+
+        .filter(Boolean)
+
+        .join(' | ');
+
+}
+
+function recordAuditEvent(action, employee, details = '') {
     try {
 
         const audit = getAuditTrail();
+
+        // Prevent useless or empty audit entries like "Blank → Blank"
+        const cleanDetails = String(details || '').trim();
+
+        if (!cleanDetails || cleanDetails === 'Blank → Blank') {
+            console.warn('Skipped empty audit log entry.');
+            return;
+        }
 
         const entry = {
 
@@ -527,7 +844,7 @@ function recordAuditEvent(action, employee, details = '') {
 
             employeeName: employee ? `${employee.first || ''} ${employee.last || ''}`.trim() : '',
 
-            details: String(details || '').trim(),
+            details: cleanDetails,
 
             userRole: currentUserRole || 'user',
 
@@ -544,17 +861,13 @@ function recordAuditEvent(action, employee, details = '') {
         console.error('Could not write audit trail.', err);
 
     }
-
 }
 
 function applyRoleLocks() {
 
     const adminOnlyIds = [
-
-        'saveEmployeeBtn',
-
-        'deleteEmployeeBtn'
-
+        'deleteEmployeeBtn',
+        'terminateEmployeeBtn'
     ];
 
     adminOnlyIds.forEach(id => {
@@ -575,10 +888,27 @@ function applyRoleLocks() {
 
 
 function applyRolePermissions() {
+    const supervisorMode = isSupervisorUser();
     const deleteEmployeeBtn = ensureDeleteEmployeeButton();
-    if (deleteEmployeeBtn) {
-        const shouldHideDeleteEmployee = isCreatingEmployee || !currentEmployee;
-        deleteEmployeeBtn.classList.toggle('hidden', shouldHideDeleteEmployee);
+    const terminateBtn = safeGet('terminateEmployeeBtn');
+
+    if (currentEmployee) {
+        const status = String(currentEmployee.status || '').toUpperCase();
+
+        if (deleteEmployeeBtn) {
+            const shouldHideDeleteEmployee = isCreatingEmployee || supervisorMode;
+            deleteEmployeeBtn.classList.toggle('hidden', shouldHideDeleteEmployee);
+        }
+
+        if (terminateBtn) {
+            console.log('Status:', status, 'isCreatingEmployee:', isCreatingEmployee);
+            const shouldHideTerminate = status === 'TERMINATED' || supervisorMode;
+            terminateBtn.classList.toggle('hidden', shouldHideTerminate);
+        }
+
+    } else {
+        if (deleteEmployeeBtn) deleteEmployeeBtn.classList.add('hidden');
+        if (terminateBtn) terminateBtn.classList.add('hidden');
     }
 
     const deleteECBtn = safeGet('deleteECBtn');
@@ -586,32 +916,190 @@ function applyRolePermissions() {
         const shouldHideDeleteEC = !currentEmergencyContactId;
         deleteECBtn.classList.toggle('hidden', shouldHideDeleteEC);
     }
+
+    if (supervisorMode) {
+        document.querySelectorAll(
+            '#deleteEmployeeBtn, #terminateEmployeeBtn, .delete-btn, .danger-delete, [data-admin-only="true"]'
+        ).forEach(el => {
+            el.classList.add('hidden');
+            el.disabled = true;
+            el.title = 'Locked: supervisors cannot delete or terminate records';
+        });
+    }
+
+    if (supervisorMode) {
+        const employeeAdminFieldIds = [
+            'empId',
+            'employeeId',
+            'empEmployeeId',
+            'empStatus',
+            'status',
+            'empFirstName',
+            'firstName',
+            'employeeFirstName',
+            'empLastName',
+            'lastName',
+            'employeeLastName',
+            'empDepartment',
+            'department',
+            'employeeDepartment',
+            'empPosition',
+            'position',
+            'employeePosition',
+            'empSupervisor',
+            'supervisor',
+            'empPayType',
+            'payType',
+            'empStandardHours',
+            'standardHours',
+            'empBenefitsStatus',
+            'benefitsStatus',
+            'empHireDate',
+            'hireDate',
+            'empNextReviewDate',
+            'nextReviewDate',
+            'empAnniversaryDate',
+            'anniversaryDate',
+            'empTenureBracket',
+            'tenureBracket',
+            'empWorkEmail',
+            'workEmail',
+            'empPersonalEmail',
+            'personalEmail',
+            'empPhone',
+            'phone',
+            'empNotes',
+            'notes'
+        ];
+
+        employeeAdminFieldIds.forEach(id => {
+            const field = safeGet(id);
+            if (!field) return;
+            field.disabled = true;
+            field.readOnly = true;
+            field.title = 'Locked: supervisors cannot edit core employee profile fields';
+        });
+
+        const saveEmployeeBtn = safeGet('saveEmployeeBtn');
+        if (saveEmployeeBtn) {
+            saveEmployeeBtn.disabled = true;
+            saveEmployeeBtn.classList.add('hidden');
+            saveEmployeeBtn.title = 'Locked: supervisors cannot edit core employee profile fields';
+        }
+
+        const newEmployeeBtn = safeGet('newEmployeeBtn') || document.querySelector("button[onclick='openNewEmployeeForm()']");
+        if (newEmployeeBtn) {
+            newEmployeeBtn.disabled = true;
+            newEmployeeBtn.classList.add('hidden');
+            newEmployeeBtn.title = 'Locked: supervisors cannot create employee records';
+        }
+    }
 }
 
 function ensureDeleteEmployeeButton() {
-    let btn = safeGet('deleteEmployeeBtn');
-    if (btn) return btn;
 
-    const newBtn = document.querySelector("button[onclick='openNewEmployeeForm()']") || safeGet('newEmployeeBtn');
-    const saveBtn = safeGet('saveEmployeeBtn');
-    const actionsRow = (newBtn && newBtn.parentElement) || (saveBtn && saveBtn.parentElement);
-    if (!actionsRow) return null;
+    const drawer = safeGet('employeeDrawer') || document.querySelector('#employeeDrawer') || document.querySelector('.drawer.open');
+    const searchRoot = drawer || document;
 
-    btn = document.createElement('button');
-    btn.type = 'button';
-    btn.id = 'deleteEmployeeBtn';
-    btn.className = 'button danger';
-    btn.textContent = 'Delete Employee';
-    btn.onclick = () => runDeleteEmployee();
+    const findButtonByText = (labels) => {
+        const normalizedLabels = labels.map(label => String(label).trim().toLowerCase());
+        return Array.from(searchRoot.querySelectorAll('button')).find(button =>
+            normalizedLabels.includes(String(button.textContent || '').trim().toLowerCase())
+        );
+    };
 
-    if (newBtn && newBtn.nextSibling) {
-        actionsRow.insertBefore(btn, newBtn.nextSibling);
-    } else {
-        actionsRow.appendChild(btn);
-        applyRoleLocks();
+    const newBtn =
+        (drawer && drawer.querySelector("button[onclick='openNewEmployeeForm()']")) ||
+        (drawer && drawer.querySelector('#newEmployeeBtn')) ||
+        findButtonByText(['New Employee']);
+
+    const saveBtn =
+        (drawer && drawer.querySelector('#saveEmployeeBtn')) ||
+        findButtonByText(['Update Employee', 'Save Employee']);
+
+    const actionsRow =
+        (newBtn && newBtn.parentElement) ||
+        (saveBtn && saveBtn.parentElement) ||
+        (drawer && drawer.querySelector('.form-actions')) ||
+        (drawer && drawer.querySelector('.actions')) ||
+        (drawer && drawer.querySelector('#tab-employee')) ||
+        (drawer && drawer.querySelector('#tab-profile')) ||
+        drawer;
+
+    if (!actionsRow) {
+
+        console.warn('Could not find employee action row for Archive/Terminate buttons.');
+
+        return null;
+
     }
 
-    return btn;
+    let archiveBtn = safeGet('deleteEmployeeBtn');
+
+    if (!archiveBtn) {
+
+        archiveBtn = document.createElement('button');
+
+        archiveBtn.type = 'button';
+
+        archiveBtn.id = 'deleteEmployeeBtn';
+
+        archiveBtn.className = 'button danger';
+
+        archiveBtn.textContent = 'Delete Employee';
+
+        archiveBtn.onclick = () => runDeleteEmployee();
+
+    }
+
+    let terminateBtn = safeGet('terminateEmployeeBtn');
+
+    if (!terminateBtn) {
+
+        terminateBtn = document.createElement('button');
+
+        terminateBtn.type = 'button';
+
+        terminateBtn.id = 'terminateEmployeeBtn';
+
+        terminateBtn.className = 'button danger';
+
+        terminateBtn.textContent = 'Terminate Employee';
+
+        terminateBtn.onclick = () => runTerminateEmployee();
+
+    }
+
+    if (!actionsRow.contains(archiveBtn)) {
+
+        if (newBtn && newBtn.nextSibling) {
+
+            actionsRow.insertBefore(archiveBtn, newBtn.nextSibling);
+
+        } else {
+
+            actionsRow.appendChild(archiveBtn);
+
+        }
+
+    }
+
+    if (!actionsRow.contains(terminateBtn)) {
+        if (archiveBtn && archiveBtn.nextSibling) {
+            actionsRow.insertBefore(terminateBtn, archiveBtn.nextSibling);
+        } else {
+            actionsRow.appendChild(terminateBtn);
+        }
+    }
+
+    archiveBtn.classList.remove('hidden');
+
+    terminateBtn.classList.remove('hidden');
+
+    applyRoleLocks();
+
+    return archiveBtn;
+
 }
 
 async function loadAllDashboardData() {
@@ -641,6 +1129,26 @@ async function loadAllDashboardData() {
 }
 
 async function loadEmployees() {
+    try {
+        const { data: { user } } = await supabaseClient.auth.getUser();
+        const userEmail = String(user?.email || '').trim().toLowerCase();
+
+        if (userEmail) {
+            const { data: accessRows, error: accessError } = await supabaseClient
+                .from('user_access')
+                .select('email, display_name, role, supervisor_name, can_delete')
+                .eq('email', userEmail)
+                .limit(1);
+
+            if (!accessError && accessRows && accessRows[0]) {
+                currentUserAccess = accessRows[0];
+                currentUserRole = String(accessRows[0].role || currentUserRole || 'user').trim().toLowerCase();
+                console.log('[Access Loaded In loadEmployees]', currentUserRole, currentUserAccess);
+            }
+        }
+    } catch (accessErr) {
+        console.warn('Could not load user access before employee scope.', accessErr);
+    }
 
     const { data, error } = await supabaseClient
         .from('employees')
@@ -652,11 +1160,31 @@ async function loadEmployees() {
         return [];
     }
 
-    EMPLOYEES = (Array.isArray(data) ? data : [])
+    const normalizedEmployees = (Array.isArray(data) ? data : [])
         .map(employee => typeof normalizeEmployee === 'function' ? normalizeEmployee(employee) : employee)
         .filter(Boolean);
 
+    window.ALL_EMPLOYEES = normalizedEmployees;
+
+    if (isSupervisorUser()) {
+        EMPLOYEES = normalizedEmployees.filter(employeeMatchesSupervisorAccess);
+
+        console.log('[Supervisor Filter Applied]', {
+            supervisorName: currentUserAccess?.supervisor_name,
+            before: normalizedEmployees.length,
+            after: EMPLOYEES.length,
+            visible: EMPLOYEES.map(e => ({
+                id: e.id,
+                name: `${e.first || e.first_name || ''} ${e.last || e.last_name || ''}`.trim(),
+                supervisor: e.supervisor
+            }))
+        });
+    } else {
+        EMPLOYEES = normalizedEmployees;
+    }
+
     window.EMPLOYEES = EMPLOYEES;
+    console.log('[Access Scope]', currentUserRole, currentUserAccess, 'visible employees:', EMPLOYEES.length);
 
     if (typeof renderEmployeeRoster === 'function') {
         renderEmployeeRoster();
@@ -2864,7 +3392,7 @@ async function deleteEmployeeRecord() {
     const employeeKey = String(currentEmployee.id || currentEmployee.dbId || '');
 
     const { error: onboardingDeleteError } = await supabaseClient
-        .from('onboarding_checklist_items')
+        .from('onboarding_tasks')
         .delete()
         .eq('employee_id', employeeKey);
 
@@ -3873,10 +4401,28 @@ function buildKpiHoverDetails() {
         .filter(Boolean);
     setCardTitle('cardTurnoverRisk', riskEmployees, 'No at-risk employees in their first 3 months');
 
-    const atRiskNames = Array.from(document.querySelectorAll('#riskEmployees .history-title'))
-        .map(el => el.textContent.trim())
-        .filter(Boolean);
-    setCardTitle('cardAtRiskEmployees', atRiskNames, 'No employees currently flagged');
+    const atRiskNames = activeEmployees
+        .filter(employee => {
+            const keys = [
+                employee.dbId,
+                employee.id,
+                employee.employee_id,
+                employee.displayId
+            ].filter(Boolean).map(String);
+
+            return keys.some(key => currentAtRiskRosterMap?.[key] || window.currentAtRiskRosterMap?.[key]);
+        })
+        .map(employee => `${employee.first || ''} ${employee.last || ''}`.trim())
+        .filter(Boolean)
+        .sort(compareText);
+
+    const atRiskCount = Number(String(safeGet('kRisk')?.textContent || '0').trim()) || 0;
+
+    setCardTitle(
+        'cardAtRiskEmployees',
+        atRiskNames.length ? atRiskNames : (atRiskCount > 0 ? [`${atRiskCount} employee flagged`] : []),
+        'No employees currently flagged'
+    );
 
     const impactPlayerNames = currentFilteredEmployees
         .filter(e => currentImpactPlayerRosterMap[String(e.dbId)] || currentImpactPlayerRosterMap[String(e.id)])

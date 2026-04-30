@@ -519,6 +519,15 @@
       border-color: #f1c4cb;
     }
 
+    .badge-terminated {
+
+      background: #fee2e2;
+
+      color: #991b1b;
+
+      border-color: #fecaca;
+    }
+
     .badge-leave {
       background: var(--yellow-bg);
       color: var(--yellow);
@@ -1069,13 +1078,17 @@
             <option value="ACTIVE">Active</option>
             <option value="INACTIVE">Inactive</option>
             <option value="LEAVE">Leave</option>
+            <option value="TERMINATED">Terminated</option>
           </select>
         </div>
 
         <div class="toolbar-right">
-          <button class="button primary" id="addEmployeeBtn" type="button" onclick="openNewEmployeeForm()">＋ Add Employee</button>
-          <button class="button soft" id="viewCandidatesBtn" type="button" onclick="openCandidatesView()">Candidate Pipeline</button>
-          <button class="button soft" id="addCandidateBtn" type="button" onclick="openNewCandidateForm()">＋ Add Candidate</button>
+          <button class="button primary" id="addEmployeeBtn" type="button" onclick="openNewEmployeeForm()">＋ Add
+            Employee</button>
+          <button class="button soft" id="viewCandidatesBtn" type="button" onclick="openCandidatesView()">Candidate
+            Pipeline</button>
+          <button class="button soft" id="addCandidateBtn" type="button" onclick="openNewCandidateForm()">＋ Add
+            Candidate</button>
           <button class="button soft" id="refreshBtn" type="button" onclick="loadAllDashboardData()">Refresh</button>
           <button class="button soft" id="clearFiltersBtn" type="button" onclick="clearFilters()">Clear Filters</button>
           <button class="button danger" id="logoutBtn" type="button" onclick="signOut()">Log Out</button>
@@ -1104,6 +1117,18 @@
           </div>
           <div class="kpi-value" id="kTurnoverRisk">—</div>
           <div class="kpi-sub" id="kTurnoverRiskSub">Weighted early-tenure retention risk</div>
+        </div>
+
+        <div class="kpi-card warn" id="cardTurnover" onmouseenter="buildKpiHoverDetails()">
+          <div class="kpi-label">Turnover Rate</div>
+          <div class="kpi-value" id="kTurnover">0.0%</div>
+          <div class="kpi-sub" id="kTurnoverSubtext">Terminated employees retained for turnover tracking</div>
+        </div>
+
+        <div class="kpi-card warn" id="cardNewHireTurnover" onmouseenter="buildKpiHoverDetails()">
+          <div class="kpi-label">New Hire Turnover</div>
+          <div class="kpi-value" id="kNewHireTurnover">0.0%</div>
+          <div class="kpi-sub" id="kNewHireTurnoverSubtext">First 90 days</div>
         </div>
 
         <div class="kpi-card alert" id="cardAtRiskEmployees" onmouseenter="buildKpiHoverDetails()">
@@ -2367,8 +2392,6 @@
        Keep this order so shared functions exist before modules use them.
   ====================================================== -->
 
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
-  
   <!-- 1. Utilities -->
   <script src="js/utils/helpers.js"></script>
 
