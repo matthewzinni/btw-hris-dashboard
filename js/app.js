@@ -724,18 +724,32 @@ function employeeMatchesSupervisorAccess(employee) {
     if (!isSupervisorUser()) return true;
 
     const supervisorName = String(currentUserAccess?.supervisor_name || '').trim().toLowerCase();
-    if (!supervisorName) return false;
+    if (!supervisorName) {
+        console.warn('[Supervisor Match Fail] No supervisor_name on currentUserAccess:', currentUserAccess);
+        return false;
+    }
 
     const employeeSupervisor = String(employee?.supervisor || employee?.displaySupervisor || '').trim().toLowerCase();
-    if (!employeeSupervisor) return false;
+    if (!employeeSupervisor) {
+        console.warn('[Supervisor Match Fail] No supervisor on employee:', employee);
+        return false;
+    }
 
     const compactAccessName = supervisorName.replace(/[^a-z0-9]/g, '');
     const compactEmployeeSupervisor = employeeSupervisor.replace(/[^a-z0-9]/g, '');
 
-    return employeeSupervisor.includes(supervisorName) ||
+    const isMatch = employeeSupervisor.includes(supervisorName) ||
         supervisorName.includes(employeeSupervisor) ||
         compactEmployeeSupervisor.includes(compactAccessName) ||
         compactAccessName.includes(compactEmployeeSupervisor);
+
+    console.log('[Supervisor Match Check]', {
+        employeeSupervisor,
+        supervisorName,
+        isMatch
+    });
+
+    return isMatch;
 }
 function getAuditTrail() {
 
@@ -1167,7 +1181,18 @@ async function loadEmployees() {
     window.ALL_EMPLOYEES = normalizedEmployees;
 
     if (isSupervisorUser()) {
-        EMPLOYEES = normalizedEmployees.filter(employeeMatchesSupervisorAccess);
+
+        if (!currentUserAccess?.supervisor_name) {
+
+            showToast('No employee access assigned. Contact HR.', 'error');
+
+            EMPLOYEES = [];
+
+        } else {
+
+            EMPLOYEES = normalizedEmployees.filter(employeeMatchesSupervisorAccess);
+
+        }
 
         console.log('[Supervisor Filter Applied]', {
             supervisorName: currentUserAccess?.supervisor_name,
