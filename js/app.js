@@ -750,7 +750,67 @@ function employeeMatchesSupervisorAccess(employee) {
     });
 
     return isMatch;
+
 }
+
+function applySupervisorDashboardView() {
+    if (!isSupervisorUser()) return;
+
+    const name = currentUserAccess?.display_name || currentUserAccess?.supervisor_name || 'Supervisor';
+
+    const title = safeGet('dashboardTitle') || document.querySelector('h1');
+    if (title) title.textContent = `${name}'s Team Dashboard`;
+
+    const rosterTitle = safeGet('rosterTitle') || document.querySelector('#employeeRosterCard h2, #employeeRosterCard h3, .roster-title');
+    if (rosterTitle) rosterTitle.textContent = 'My Team';
+
+    // KPI LABEL UPDATES
+    const activeLabel = document.querySelector('#kActiveHC')?.closest('.kpi-card')?.querySelector('.kpi-label');
+    if (activeLabel) activeLabel.textContent = 'My Team Size';
+
+    const reviewsLabel = document.querySelector('#kReviewsDue')?.closest('.kpi-card')?.querySelector('.kpi-label');
+    if (reviewsLabel) reviewsLabel.textContent = 'My Reviews Due';
+
+    const riskLabel = document.querySelector('#kTurnoverRisk')?.closest('.kpi-card')?.querySelector('.kpi-label');
+    if (riskLabel) riskLabel.textContent = 'My Team Risk';
+
+    const leaveLabel = document.querySelector('#kOnLeave')?.closest('.kpi-card')?.querySelector('.kpi-label');
+    if (leaveLabel) leaveLabel.textContent = 'My Team On Leave';
+
+    // HIDE COMPANY-WIDE KPIs
+    const deptCard = document.querySelector('#kDepartments')?.closest('.kpi-card');
+    if (deptCard) deptCard.classList.add('hidden');
+
+    // ADMIN UI LOCK
+    document.querySelectorAll('[data-admin-only="true"], .admin-only').forEach(el => {
+        el.classList.add('hidden');
+        el.disabled = true;
+    });
+
+    // OPTIONAL: add simple supervisor insight banner
+    const existingBanner = document.getElementById('supervisorBanner');
+    if (!existingBanner) {
+        const banner = document.createElement('div');
+        banner.id = 'supervisorBanner';
+        banner.style.padding = '10px';
+        banner.style.marginBottom = '10px';
+        banner.style.borderRadius = '6px';
+        banner.style.background = '#eef2ff';
+        banner.style.fontSize = '14px';
+
+        const atRisk = (window.EMPLOYEES || []).filter(e => {
+            const key = String(e.dbId || e.id || '');
+            const risk = currentAtRiskRosterMap?.[key];
+            return risk && (risk.lowReview || risk.openIncidentCount > 0 || risk.manualReason);
+        }).length;
+
+        banner.textContent = `You have ${EMPLOYEES.length} employees. ${atRisk} may need attention.`;
+
+        const container = document.querySelector('.dashboard') || document.body;
+        if (container) container.prepend(banner);
+    }
+}
+
 function getAuditTrail() {
 
     try {
@@ -1225,6 +1285,10 @@ async function loadEmployees() {
 
     if (typeof renderDepartmentSummary === 'function') {
         renderDepartmentSummary();
+    }
+
+    if (typeof applySupervisorDashboardView === 'function') {
+        applySupervisorDashboardView();
     }
 
     return EMPLOYEES;
