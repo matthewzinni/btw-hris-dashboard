@@ -6,6 +6,8 @@
       "ES2017"
     ],
     "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "allowJs": false,

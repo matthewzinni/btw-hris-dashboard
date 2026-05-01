@@ -1,5 +1,3 @@
-// @ts-nocheck
-
 declare function showToast(message: string, type?: string): void;
 
 declare const supabaseClient: any;
@@ -9,6 +7,14 @@ declare function openDrawer(employee: any): void;
 declare function loadEmployeeReviews(id: string): Promise<void>;
 
 declare function setText(id: string, value: any): void;
+declare function loadEmployeeNotes(id: string): Promise<void>;
+declare function updateEmployeeRowBadges(employeeId: string): void;
+declare function createEmployee(payload: any): Promise<any>;
+declare const OrbisServices: any;
+
+function safeGet(id: string): any {
+    return document.getElementById(id);
+}
 declare function esc(value: any): string;
 declare function nl2br(value: any): string;
 declare function fmtDate(value: any): string;
@@ -18,10 +24,7 @@ declare function bindDrawerEvents(): void;
 declare function closeDrawer(): void;
 declare function initializeAuth(): void;
 declare function renderEmployeeRoster(): void;
-declare function loadReviewDashboard(): Promise<void>;
-declare function loadRecentActivity(): Promise<void>;
-declare function initKpiHoverUi(): void;
-declare function buildKpiHoverDetails(): void;
+
 
 type Employee = {
 
@@ -109,7 +112,7 @@ window.addEventListener('DOMContentLoaded', () => {
         initializeAuth();
     }
 
-    document.querySelectorAll('th[data-sort]').forEach(th => {
+    document.querySelectorAll('th[data-sort]').forEach((th: any) => {
         th.style.cursor = 'pointer';
         th.addEventListener('click', () => {
             const nextColumn = th.dataset.sort;
@@ -146,20 +149,20 @@ window.addEventListener('DOMContentLoaded', () => {
 });
 
 let EMPLOYEES: Employee[] = [];
-let CANDIDATES = [];
-let currentCandidate = null;
+let CANDIDATES: any[] = [];
+let currentCandidate: any | null = null;
 let isCreatingCandidate = false;
-let currentFilteredEmployees = [];
-let currentEmployee = null;
-let currentDisciplineReportId = null;
-let currentNoteId = null;
-let currentMeetingId = null;
-let currentReviewId = null;
-let currentEmergencyContactId = null;
-let currentIncidentReportId = null;
-let currentStayInterviewId = null;
+let currentFilteredEmployees: Employee[] = [];
+let currentEmployee: Employee | null = null;
+let currentDisciplineReportId: string | null = null;
+let currentNoteId: string | null = null;
+let currentMeetingId: string | null = null;
+let currentReviewId: string | null = null;
+let currentEmergencyContactId: string | null = null;
+let currentIncidentReportId: string | null = null;
+let currentStayInterviewId: string | null = null;
 let isCreatingEmployee = false;
-let currentSort = {
+let currentSort: { column: string; direction: 'asc' | 'desc' } = {
     column: 'name',
     direction: 'asc'
 };
@@ -178,8 +181,8 @@ let currentImpactPlayerRosterMap: Record<string, RosterRiskMeta> = {};
 // =========================
 // UI / NAVIGATION
 // =========================
-function switchTab(tabName) {
-    document.querySelectorAll('.tab-btn').forEach(btn => {
+function switchTab(tabName: string): void {
+    document.querySelectorAll('.tab-btn').forEach((btn: any) => {
         btn.classList.toggle('active', btn.dataset.tab === tabName);
     });
 
@@ -188,7 +191,7 @@ function switchTab(tabName) {
     });
 }
 
-function openNewEmployeeForm() {
+function openNewEmployeeForm(): void {
     if (typeof startNewEmployee === 'function') {
         try {
             startNewEmployee();
@@ -228,7 +231,7 @@ function openNewEmployeeForm() {
     applyRolePermissions();
 }
 
-async function deleteEmployeeById(employeeId) {
+async function deleteEmployeeById(employeeId: any): Promise<{ error: any }> {
     const db = window.supabaseClient || supabaseClient;
 
     if (!db) {
@@ -281,7 +284,7 @@ async function deleteEmployeeById(employeeId) {
 
 window.deleteEmployeeById = deleteEmployeeById;
 
-async function runDeleteEmployee() {
+async function runDeleteEmployee(): Promise<void> {
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
@@ -293,7 +296,8 @@ async function runDeleteEmployee() {
     if (!confirmed) return;
 
     const employeeId = currentEmployee.id || currentEmployee.employee_id || currentEmployee.dbId;
-    const { error } = await deleteEmployeeById(employeeId);
+    const deleteResult = await deleteEmployeeById(employeeId);
+    const error = deleteResult?.error;
 
     if (error) {
         showToast(error.message || 'Could not archive employee.', 'error');
@@ -312,7 +316,7 @@ async function runDeleteEmployee() {
     }
 }
 
-async function runTerminateEmployee() {
+async function runTerminateEmployee(): Promise<void> {
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
@@ -365,7 +369,7 @@ async function runTerminateEmployee() {
 
 window.runTerminateEmployee = runTerminateEmployee;
 
-async function updateEmployeeById(employeeId, payload) {
+async function updateEmployeeById(employeeId: any, payload: any): Promise<{ data: any; error: any }> {
     const db = window.supabaseClient || supabaseClient;
 
     if (!db) {
@@ -417,7 +421,7 @@ window.updateEmployeeById = updateEmployeeById;
 // =========================
 // FORM RESET / STATE MANAGEMENT
 // =========================
-function resetDrawerForms() {
+function resetDrawerForms(): void {
     if (safeGet('noteDate')) safeGet('noteDate').value = todayInputValue();
     if (safeGet('noteType')) safeGet('noteType').value = '';
     if (safeGet('noteText')) safeGet('noteText').value = '';
@@ -502,7 +506,7 @@ function resetDrawerForms() {
     safeGet('reviewEditStatus')?.classList.add('hidden');
 }
 
-function normalizeEmployee(employee) {
+function normalizeEmployee(employee: any): Employee | null {
 
     if (!employee) return null;
 
@@ -578,7 +582,7 @@ function normalizeEmployee(employee) {
 
 }
 
-function populateEmployeeAdminForm(employee) {
+function populateEmployeeAdminForm(employee: any): void {
     if (!employee) return;
     employee = normalizeEmployee(employee);
     if (!employee) return;
@@ -609,18 +613,18 @@ function populateEmployeeAdminForm(employee) {
         notes: employee.notes || ''
     };
 
-    const setField = (id, value) => {
+    const setField = (id: string, value: any): void => {
         const el = safeGet(id);
         if (!el) return;
-        el.value = value ?? '';
+        (el as HTMLInputElement).value = value ?? '';
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
-    const setByPlaceholder = (placeholder, value) => {
+    const setByPlaceholder = (placeholder: string, value: any): void => {
         const el = document.querySelector(`input[placeholder="${placeholder}"], select[placeholder="${placeholder}"], textarea[placeholder="${placeholder}"]`);
         if (!el) return;
-        el.value = value ?? '';
+        (el as HTMLInputElement).value = value ?? '';
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
     };
@@ -689,14 +693,14 @@ function populateEmployeeAdminForm(employee) {
 
     const drawer = safeGet('employeeDrawer') || document.querySelector('#employeeDrawer');
 
-    const statusSelect =
+    const statusSelect: any =
         safeGet('empStatus') ||
         safeGet('status') ||
         drawer?.querySelector('select#empStatus') ||
         drawer?.querySelector('select#status') ||
-        Array.from(drawer?.querySelectorAll('select') || []).find(select => {
-            return Array.from(select.options || []).some(option => {
-                const optionText = option.textContent.trim().toLowerCase();
+        Array.from(drawer?.querySelectorAll('select') || []).find((select: any) => {
+            return Array.from(select.options || []).some((option: any) => {
+                const optionText = String(option.textContent || '').trim().toLowerCase();
                 return optionText === 'active' || optionText === 'inactive' || optionText === 'leave' || optionText === 'terminated';
             });
         });
@@ -709,7 +713,7 @@ function populateEmployeeAdminForm(employee) {
             { value: 'TERMINATED', label: 'Terminated' }
         ];
 
-        const existingStatuses = Array.from(statusSelect.options || []).map(option =>
+        const existingStatuses = Array.from(statusSelect.options || []).map((option: any) =>
             String(option.value || option.textContent || '').trim().toUpperCase()
         );
 
@@ -723,12 +727,16 @@ function populateEmployeeAdminForm(employee) {
         });
 
         const normalizedStatus = String(values.status || '').trim().toUpperCase();
-        const matchingOption = Array.from(statusSelect.options || []).find(option => {
+        const matchingOption = Array.from(statusSelect.options || []).find((option: any) => {
             return String(option.value || '').trim().toUpperCase() === normalizedStatus ||
                 String(option.textContent || '').trim().toUpperCase() === normalizedStatus;
         });
 
-        statusSelect.value = matchingOption ? matchingOption.value : 'ACTIVE';
+        statusSelect.value = matchingOption
+
+            ? (matchingOption as HTMLOptionElement).value
+
+            : 'ACTIVE';
         statusSelect.dispatchEvent(new Event('input', { bubbles: true }));
         statusSelect.dispatchEvent(new Event('change', { bubbles: true }));
     }
@@ -740,7 +748,7 @@ function populateEmployeeAdminForm(employee) {
 
 
 
-function cancelStayInterviewEdit() {
+function cancelStayInterviewEdit(): void {
     currentStayInterviewId = null;
     if (safeGet('stayInterviewDate')) safeGet('stayInterviewDate').value = todayInputValue();
     if (safeGet('stayInterviewType')) safeGet('stayInterviewType').value = '';
@@ -758,13 +766,13 @@ function cancelStayInterviewEdit() {
 }
 
 
-function compareText(a, b) {
+function compareText(a: any, b: any): number {
     return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
 }
 
 let isLoadingDashboard = false;
 
-async function getUserRole() {
+async function getUserRole(): Promise<UserRole | null> {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
         if (!user) return null;
@@ -808,15 +816,15 @@ async function getUserRole() {
     }
 }
 
-function canManageEmployeeRecords() {
+function canManageEmployeeRecords(): boolean {
     return String(currentUserRole || '').toLowerCase() === 'admin';
 }
 
-function isSupervisorUser() {
+function isSupervisorUser(): boolean {
     return String(currentUserRole || '').toLowerCase() === 'supervisor';
 }
 
-function employeeMatchesSupervisorAccess(employee) {
+function employeeMatchesSupervisorAccess(employee: any): boolean {
     if (!isSupervisorUser()) return true;
 
     const supervisorName = String(currentUserAccess?.supervisor_name || '').trim().toLowerCase();
@@ -849,7 +857,7 @@ function employeeMatchesSupervisorAccess(employee) {
 
 }
 
-function applySupervisorDashboardView() {
+function applySupervisorDashboardView(): void {
     if (!isSupervisorUser()) return;
 
     const name = currentUserAccess?.display_name || currentUserAccess?.supervisor_name || 'Supervisor';
@@ -879,8 +887,13 @@ function applySupervisorDashboardView() {
 
     // ADMIN UI LOCK
     document.querySelectorAll('[data-admin-only="true"], .admin-only').forEach(el => {
-        el.classList.add('hidden');
-        el.disabled = true;
+
+        const control = el as HTMLElement & { disabled?: boolean };
+
+        control.classList.add('hidden');
+
+        control.disabled = true;
+
     });
 
     // OPTIONAL: add simple supervisor insight banner
@@ -907,7 +920,7 @@ function applySupervisorDashboardView() {
     }
 }
 
-function getAuditTrail() {
+function getAuditTrail(): any[] {
 
     try {
 
@@ -925,7 +938,7 @@ function getAuditTrail() {
 
 }
 
-function buildEmployeeChangeLog(oldEmployee, newEmployee) {
+function buildEmployeeChangeLog(oldEmployee: any, newEmployee: any): string {
 
     const oldData = normalizeEmployee(oldEmployee || {});
 
@@ -967,7 +980,7 @@ function buildEmployeeChangeLog(oldEmployee, newEmployee) {
 
     ];
 
-    const formatValue = value => {
+    const formatValue = (value: any): string => {
 
         const text = String(value ?? '').trim();
 
@@ -993,7 +1006,7 @@ function buildEmployeeChangeLog(oldEmployee, newEmployee) {
 
 }
 
-function recordAuditEvent(action, employee, details = '') {
+function recordAuditEvent(action: string, employee: any, details: string = ''): void {
     try {
 
         const audit = getAuditTrail();
@@ -1033,7 +1046,7 @@ function recordAuditEvent(action, employee, details = '') {
     }
 }
 
-function applyRoleLocks() {
+function applyRoleLocks(): void {
 
     const adminOnlyIds = [
         'deleteEmployeeBtn',
@@ -1057,7 +1070,7 @@ function applyRoleLocks() {
 }
 
 
-function applyRolePermissions() {
+function applyRolePermissions(): void {
     const supervisorMode = isSupervisorUser();
     const deleteEmployeeBtn = ensureDeleteEmployeeButton();
     const terminateBtn = safeGet('terminateEmployeeBtn');
@@ -1091,9 +1104,15 @@ function applyRolePermissions() {
         document.querySelectorAll(
             '#deleteEmployeeBtn, #terminateEmployeeBtn, .delete-btn, .danger-delete, [data-admin-only="true"]'
         ).forEach(el => {
-            el.classList.add('hidden');
-            el.disabled = true;
-            el.title = 'Locked: supervisors cannot delete or terminate records';
+
+            const control = el as HTMLElement & { disabled?: boolean };
+
+            control.classList.add('hidden');
+
+            control.disabled = true;
+
+            control.title = 'Locked: supervisors cannot delete or terminate records';
+
         });
     }
 
@@ -1166,14 +1185,14 @@ function applyRolePermissions() {
     }
 }
 
-function ensureDeleteEmployeeButton() {
+function ensureDeleteEmployeeButton(): any {
 
     const drawer = safeGet('employeeDrawer') || document.querySelector('#employeeDrawer') || document.querySelector('.drawer.open');
     const searchRoot = drawer || document;
 
-    const findButtonByText = (labels) => {
+    const findButtonByText = (labels: string[]): any => {
         const normalizedLabels = labels.map(label => String(label).trim().toLowerCase());
-        return Array.from(searchRoot.querySelectorAll('button')).find(button =>
+        return Array.from(searchRoot.querySelectorAll('button')).find((button: any) =>
             normalizedLabels.includes(String(button.textContent || '').trim().toLowerCase())
         );
     };
@@ -1272,7 +1291,7 @@ function ensureDeleteEmployeeButton() {
 
 }
 
-async function loadAllDashboardData() {
+async function loadAllDashboardData(): Promise<void> {
     if (isLoadingDashboard) return;
     isLoadingDashboard = true;
 
@@ -1298,7 +1317,7 @@ async function loadAllDashboardData() {
     buildKpiHoverDetails();
 }
 
-async function loadEmployees() {
+async function loadEmployees(): Promise<Employee[]> {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
         const userEmail = String(user?.email || '').trim().toLowerCase();
@@ -1393,7 +1412,7 @@ async function loadEmployees() {
 // =========================
 // CANDIDATES
 // =========================
-async function loadCandidates() {
+async function loadCandidates(): Promise<void> {
     const body = safeGet('candidateBody');
     if (body) {
         body.innerHTML = '<tr><td colspan="5" class="empty">Loading candidates…</td></tr>';
@@ -1426,7 +1445,7 @@ async function loadCandidates() {
     }
 }
 
-function buildCandidateInterviewNotice(candidate) {
+function buildCandidateInterviewNotice(candidate: any): string {
 
     const status = String(candidate?.interview_status || '').toLowerCase();
 
@@ -1458,7 +1477,7 @@ function buildCandidateInterviewNotice(candidate) {
 
 }
 
-function renderCandidates() {
+function renderCandidates(): void {
     const pipeline = safeGet('candidatePipeline');
     const tableBody = safeGet('candidateBody');
 
@@ -1509,7 +1528,7 @@ function renderCandidates() {
     if (!pipeline) return;
 }
 
-async function updateCandidateStage(candidateId, stage) {
+async function updateCandidateStage(candidateId: any, stage: string): Promise<void> {
     // If a candidate is moved to Hired, convert them into a real employee record instead of only hiding them from the candidate pipeline.
     if (String(stage || '').trim().toLowerCase() === 'hired') {
         await convertCandidateToEmployee(candidateId);
@@ -1531,7 +1550,7 @@ async function updateCandidateStage(candidateId, stage) {
     await loadCandidates();
 }
 
-function generateEmployeeId() {
+function generateEmployeeId(): string {
     const maxExisting = EMPLOYEES.reduce((max, employee) => {
         const match = String(employee.employee_id || employee.displayId || employee.id || '').match(/(\d+)$/);
         const numeric = match ? Number(match[1]) : 0;
@@ -1541,10 +1560,10 @@ function generateEmployeeId() {
     return `BTW${maxExisting + 1}`;
 }
 
-async function generateAvailableEmployeeId() {
+async function generateAvailableEmployeeId(): Promise<string> {
     const usedNumbers = new Set();
 
-    const collectNumber = (value) => {
+    const collectNumber = (value: any): void => {
         const match = String(value || '').match(/(\d+)$/);
         if (match) usedNumbers.add(Number(match[1]));
     };
@@ -1578,7 +1597,7 @@ async function generateAvailableEmployeeId() {
         console.warn('Could not check existing employee/onboarding IDs. Falling back to local employee list.', err);
     }
 
-    let nextNumber = usedNumbers.size ? Math.max(...usedNumbers) + 1 : 1;
+    let nextNumber = usedNumbers.size ? Math.max(...Array.from(usedNumbers as Set<number>)) + 1 : 1;
 
     while (usedNumbers.has(nextNumber)) {
         nextNumber += 1;
@@ -1587,7 +1606,7 @@ async function generateAvailableEmployeeId() {
     return `BTW${nextNumber}`;
 }
 
-async function createDefaultOnboardingTasks(employeeId) {
+async function createDefaultOnboardingTasks(employeeId: any): Promise<void> {
     if (!employeeId) return;
 
     const defaultTasks = [
@@ -1632,7 +1651,7 @@ async function createDefaultOnboardingTasks(employeeId) {
     console.log('✅ Default onboarding tasks created:', employeeId);
 }
 
-async function loadOnboardingTasks(employeeId) {
+async function loadOnboardingTasks(employeeId: any): Promise<void> {
     if (!employeeId) return;
 
     let { data, error } = await supabaseClient
@@ -1696,7 +1715,7 @@ async function loadOnboardingTasks(employeeId) {
     if (bar) bar.style.width = `${percent}%`;
 }
 
-async function toggleOnboardingTask(taskId, isComplete) {
+async function toggleOnboardingTask(taskId: any, isComplete: boolean): Promise<void> {
     if (!taskId) return;
 
     const { error } = await supabaseClient
@@ -1717,7 +1736,7 @@ async function toggleOnboardingTask(taskId, isComplete) {
 window.loadOnboardingTasks = loadOnboardingTasks;
 window.toggleOnboardingTask = toggleOnboardingTask;
 
-async function convertCandidateToEmployee(candidateId) {
+async function convertCandidateToEmployee(candidateId: any): Promise<void> {
     const candidate = CANDIDATES.find(item => String(item.id) === String(candidateId));
     if (!candidate) {
         showToast('Candidate not found.', 'error');
@@ -1868,8 +1887,8 @@ async function convertCandidateToEmployee(candidateId) {
     });
 }
 
-function switchCandidateTab(tabName) {
-    document.querySelectorAll('[data-candidate-tab]').forEach(btn => {
+function switchCandidateTab(tabName: string): void {
+    document.querySelectorAll('[data-candidate-tab]').forEach((btn: any) => {
         btn.classList.toggle('active', btn.dataset.candidateTab === tabName);
     });
 
@@ -1878,7 +1897,7 @@ function switchCandidateTab(tabName) {
     });
 }
 
-function closeCandidateDrawer() {
+function closeCandidateDrawer(): void {
     safeGet('drawerBackdrop')?.classList.remove('open');
     const drawer = safeGet('candidateDrawer');
     if (drawer) {
@@ -1889,7 +1908,7 @@ function closeCandidateDrawer() {
     isCreatingCandidate = false;
 }
 
-function resetCandidateForm() {
+function resetCandidateForm(): void {
     if (safeGet('candidateFirstNameInput')) safeGet('candidateFirstNameInput').value = '';
     if (safeGet('candidateLastNameInput')) safeGet('candidateLastNameInput').value = '';
     if (safeGet('candidateEmailInput')) safeGet('candidateEmailInput').value = '';
@@ -1903,7 +1922,7 @@ function resetCandidateForm() {
     if (safeGet('candidateNotesPreview')) safeGet('candidateNotesPreview').innerHTML = '<div class="empty">Candidate notes will appear here.</div>';
 }
 
-function openNewCandidateForm() {
+function openNewCandidateForm(): void {
     currentCandidate = null;
     isCreatingCandidate = true;
     resetCandidateForm();
@@ -1921,7 +1940,7 @@ function openNewCandidateForm() {
     }
 }
 
-async function openCandidateDrawer(candidateId) {
+async function openCandidateDrawer(candidateId: any): Promise<void> {
     const candidate = CANDIDATES.find(item => String(item.id) === String(candidateId));
     if (!candidate) {
         showToast('Candidate not found.', 'error');
@@ -1978,7 +1997,7 @@ async function openCandidateDrawer(candidateId) {
     }
 }
 
-async function saveCandidateRecord() {
+async function saveCandidateRecord(): Promise<void> {
     const payload = {
         first_name: safeGet('candidateFirstNameInput')?.value?.trim() || '',
         last_name: safeGet('candidateLastNameInput')?.value?.trim() || '',
@@ -2037,7 +2056,7 @@ async function saveCandidateRecord() {
     }
 }
 
-async function deleteCandidateRecord() {
+async function deleteCandidateRecord(): Promise<void> {
     if (!currentCandidate) {
         showToast('Open a candidate first.', 'error');
         return;
@@ -2063,7 +2082,7 @@ async function deleteCandidateRecord() {
     await loadCandidates();
 }
 
-async function convertCurrentCandidateToEmployee() {
+async function convertCurrentCandidateToEmployee(): Promise<void> {
     if (!currentCandidate) {
         showToast('Open a candidate first.', 'error');
         return;
@@ -2080,7 +2099,7 @@ window.saveCandidateRecord = saveCandidateRecord;
 window.deleteCandidateRecord = deleteCandidateRecord;
 window.convertCurrentCandidateToEmployee = convertCurrentCandidateToEmployee;
 
-function populateDepartmentFilter() {
+function populateDepartmentFilter(): void {
     const deptSelect = safeGet('deptFilter');
     if (!deptSelect) return;
 
@@ -2097,7 +2116,7 @@ function populateDepartmentFilter() {
     deptSelect.value = currentValue;
 }
 
-function openCandidatesView() {
+function openCandidatesView(): void {
 
     const el = document.getElementById('candidatesCard');
 
@@ -2114,14 +2133,14 @@ window.openCandidatesView = openCandidatesView;
 
 
 
-function renderRoster() {
+function renderRoster(): void {
     if (typeof renderEmployeeRoster === 'function') {
         renderEmployeeRoster();
         return;
     }
 }
 
-function clearFilters() {
+function clearFilters(): void {
     if (safeGet('globalSearch')) safeGet('globalSearch').value = '';
     if (safeGet('deptFilter')) safeGet('deptFilter').value = '';
     if (safeGet('statusFilter')) safeGet('statusFilter').value = '';
@@ -2132,7 +2151,7 @@ function clearFilters() {
     renderRoster();
 }
 
-function renderDepartmentSummary() {
+function renderDepartmentSummary(): void {
     const body = safeGet('deptSummaryBody');
     if (!body) return;
 
@@ -2157,7 +2176,7 @@ function renderDepartmentSummary() {
       `).join('');
 }
 
-function renderKpiEmployeeMetrics() {
+function renderKpiEmployeeMetrics(): void {
     const active = EMPLOYEES.filter(e => e.status === 'ACTIVE');
     const reviewEligibleActive = active.filter(e => !String(e.payType || '').toLowerCase().includes('contract'));
     const departments = [...new Set(active.map(e => e.dept).filter(Boolean))];
@@ -2166,7 +2185,7 @@ function renderKpiEmployeeMetrics() {
     today.setHours(0, 0, 0, 0);
 
     const overdueReviewEmployees = reviewEligibleActive.filter(e => {
-        if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview)) return false;
+        if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview.getTime())) return false;
         const reviewDate = new Date(e.nextReview);
         reviewDate.setHours(0, 0, 0, 0);
         return reviewDate <= today;
@@ -2236,8 +2255,8 @@ function renderKpiEmployeeMetrics() {
     }
 }
 
-function applyReviewImpactPlayers(latestReviewByEmployee) {
-    Object.entries(latestReviewByEmployee).forEach(([employeeId, item]) => {
+function applyReviewImpactPlayers(latestReviewByEmployee: Record<string, any>): void {
+    Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
         if (item.avgScore !== null && item.avgScore >= 4) {
             if (!currentImpactPlayerRosterMap[employeeId]) {
                 currentImpactPlayerRosterMap[employeeId] = {
@@ -2255,7 +2274,7 @@ function applyReviewImpactPlayers(latestReviewByEmployee) {
     });
 }
 
-async function loadSummaryMetrics() {
+async function loadSummaryMetrics(): Promise<void> {
     try {
         const [disciplineRes, reviewsRes, incidentsRes, manualRiskRes, impactPlayerRes] = await Promise.all([
             supabaseClient
@@ -2351,7 +2370,7 @@ async function loadSummaryMetrics() {
                 }
             });
 
-            Object.entries(latestReviewByEmployee).forEach(([employeeId, item]) => {
+            Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
                 if (item.avgScore !== null && item.avgScore <= 3) {
                     reviewRiskEmployeeIds.add(String(employeeId));
                 }
@@ -2390,15 +2409,15 @@ async function loadSummaryMetrics() {
                 }
             });
 
-            Object.entries(latestManualRiskByEmployee).forEach(([employeeId, row]) => {
+            Object.entries(latestManualRiskByEmployee).forEach(([employeeId, row]: [string, any]) => {
                 if (String(row.note_type || '') === 'At-Risk Flag') {
                     manualRiskEmployeeIds.add(employeeId);
                 }
             });
 
-            Object.entries(latestManualRiskByEmployee).forEach(([employeeId, row]) => {
-                if (!currentAtRiskRosterMap[employeeId]) {
-                    currentAtRiskRosterMap[employeeId] = {
+            Object.entries(latestManualRiskByEmployee).forEach(([employeeId, row]: [string, any]) => {
+                if (!currentAtRiskRosterMap[String(employeeId)]) {
+                    currentAtRiskRosterMap[String(employeeId)] = {
                         manualReason: '',
                         lowReview: false,
                         reviewScore: null,
@@ -2409,15 +2428,15 @@ async function loadSummaryMetrics() {
                 }
 
                 if (String(row.note_type || '') === 'At-Risk Flag') {
-                    currentAtRiskRosterMap[employeeId].manualReason = String(row.note_text || '').trim();
-                    currentAtRiskRosterMap[employeeId].flaggedDate = String(row.note_date || '').trim();
-                    currentAtRiskRosterMap[employeeId].flaggedBy = 'Matthew Zinni';
+                    currentAtRiskRosterMap[String(employeeId)].manualReason = String(row.note_text || '').trim();
+                    currentAtRiskRosterMap[String(employeeId)].flaggedDate = String(row.note_date || '').trim();
+                    currentAtRiskRosterMap[String(employeeId)].flaggedBy = 'Matthew Zinni';
                 }
             });
-            Object.entries(latestReviewByEmployee).forEach(([employeeId, item]) => {
+            Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
                 if (item.avgScore !== null && item.avgScore <= 3) {
-                    if (!currentAtRiskRosterMap[employeeId]) {
-                        currentAtRiskRosterMap[employeeId] = {
+                    if (!currentAtRiskRosterMap[String(employeeId)]) {
+                        currentAtRiskRosterMap[String(employeeId)] = {
                             manualReason: '',
                             lowReview: false,
                             reviewScore: null,
@@ -2426,14 +2445,14 @@ async function loadSummaryMetrics() {
                             flaggedBy: ''
                         };
                     }
-                    currentAtRiskRosterMap[employeeId].lowReview = true;
-                    currentAtRiskRosterMap[employeeId].reviewScore = item.avgScore;
+                    currentAtRiskRosterMap[String(employeeId)].lowReview = true;
+                    currentAtRiskRosterMap[String(employeeId)].reviewScore = item.avgScore;
                 }
             });
 
             incidentRiskEmployeeIds.forEach(employeeId => {
-                if (!currentAtRiskRosterMap[employeeId]) {
-                    currentAtRiskRosterMap[employeeId] = {
+                if (!currentAtRiskRosterMap[String(employeeId)]) {
+                    currentAtRiskRosterMap[String(employeeId)] = {
                         manualReason: '',
                         lowReview: false,
                         reviewScore: null,
@@ -2443,8 +2462,8 @@ async function loadSummaryMetrics() {
                     };
                 }
 
-                currentAtRiskRosterMap[employeeId].openIncidentCount =
-                    (currentAtRiskRosterMap[employeeId].openIncidentCount || 0) + 1;
+                currentAtRiskRosterMap[String(employeeId)].openIncidentCount =
+                    (currentAtRiskRosterMap[String(employeeId)].openIncidentCount || 0) + 1;
             });
             // Refresh roster so new manual At-Risk badge appears
             if (Array.isArray(EMPLOYEES) && EMPLOYEES.length) {
@@ -2478,7 +2497,7 @@ async function loadSummaryMetrics() {
                 }
             });
 
-            Object.entries(latestImpactPlayerByEmployee).forEach(([employeeId, row]) => {
+            Object.entries(latestImpactPlayerByEmployee).forEach(([employeeId, row]: [string, any]) => {
                 if (String(row.note_type || '') === 'Impact Player Flag') {
                     impactPlayerEmployeeIds.add(employeeId);
                     currentImpactPlayerRosterMap[employeeId] = {
@@ -2501,7 +2520,7 @@ async function loadSummaryMetrics() {
             }
         }
 
-        Object.entries(latestReviewByEmployee).forEach(([employeeId, item]) => {
+        Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
             if (item.avgScore !== null && item.avgScore >= 4) {
                 impactPlayerEmployeeIds.add(employeeId);
             }
@@ -2664,14 +2683,14 @@ async function loadReviewDashboard() {
         }
 
         const overdueReviews = activeEmployees.filter(e => {
-            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview)) return false;
+            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview.getTime())) return false;
             const reviewDate = new Date(e.nextReview);
             reviewDate.setHours(0, 0, 0, 0);
             return reviewDate <= today;
         }).length;
 
         const dueSoonReviews = activeEmployees.filter(e => {
-            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview)) return false;
+            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview.getTime())) return false;
             const reviewDate = new Date(e.nextReview);
             reviewDate.setHours(0, 0, 0, 0);
             return reviewDate > today && reviewDate <= next30;
@@ -2703,7 +2722,7 @@ async function loadReviewDashboard() {
                 let statusLabel = 'No Date';
                 let statusClass = 'badge badge-soft';
 
-                if (employee.nextReview && employee.nextReview instanceof Date && !isNaN(employee.nextReview)) {
+                if (employee.nextReview && employee.nextReview instanceof Date && !isNaN(employee.nextReview.getTime())) {
                     const reviewDate = new Date(employee.nextReview);
                     reviewDate.setHours(0, 0, 0, 0);
 
@@ -2734,8 +2753,8 @@ async function loadReviewDashboard() {
                 };
             })
             .sort((a, b) => {
-                const aTime = a.employee.nextReview instanceof Date && !isNaN(a.employee.nextReview) ? a.employee.nextReview.getTime() : Number.MAX_SAFE_INTEGER;
-                const bTime = b.employee.nextReview instanceof Date && !isNaN(b.employee.nextReview) ? b.employee.nextReview.getTime() : Number.MAX_SAFE_INTEGER;
+                const aTime = a.employee.nextReview instanceof Date && !isNaN(a.employee.nextReview.getTime()) ? a.employee.nextReview.getTime() : Number.MAX_SAFE_INTEGER;
+                const bTime = b.employee.nextReview instanceof Date && !isNaN(b.employee.nextReview.getTime()) ? b.employee.nextReview.getTime() : Number.MAX_SAFE_INTEGER;
                 return aTime - bTime;
             })
             .slice(0, 12);
@@ -2826,7 +2845,7 @@ async function loadExecutiveInsight() {
         });
 
         const overdueReviewEmployees = activeEmployees.filter(e => {
-            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview)) return false;
+            if (!e.nextReview || !(e.nextReview instanceof Date) || isNaN(e.nextReview.getTime())) return false;
             const reviewDate = new Date(e.nextReview);
             reviewDate.setHours(0, 0, 0, 0);
             return reviewDate <= today;
@@ -3587,7 +3606,8 @@ async function deleteEmployeeRecord() {
         return;
     }
 
-    const { data, error } = await deleteEmployeeById(String(currentEmployee.dbId || currentEmployee.id));
+    const deleteResult = await deleteEmployeeById(String(currentEmployee.dbId || currentEmployee.id));
+    const error = deleteResult?.error;
 
     if (error) {
         console.error(error);
@@ -3933,7 +3953,7 @@ async function loadEmployeeDocuments(employeeId) {
   </div>
 `).join('');
 
-    target.querySelectorAll('[data-delete-doc-id]').forEach(btn => {
+    target.querySelectorAll('[data-delete-doc-id]').forEach((btn: any) => {
         btn.addEventListener('click', () => {
             deleteEmployeeDocument(btn.dataset.deleteDocId);
         });
@@ -4026,7 +4046,7 @@ async function loadEmployeeOnboarding(employeeId) {
         target.innerHTML = Object.entries(grouped).map(([section, items]) => `
             <div style="margin-bottom:16px;">
                 <div style="font-weight:800; font-size:13px; letter-spacing:0.02em; text-transform:uppercase; color:var(--muted); margin-bottom:8px;">${esc(section)}</div>
-                ${items.map(row => {
+                ${(items as any[]).map(row => {
             const done = row.status === 'Completed';
             // today is now declared above, so don't redeclare
             const overdue = !done && (
@@ -4642,7 +4662,7 @@ function buildKpiHoverDetails() {
 
     const now = new Date();
     const dueReviews = activeEmployees
-        .filter(e => e.nextReview && e.nextReview instanceof Date && !isNaN(e.nextReview) && e.nextReview <= now)
+        .filter(e => e.nextReview && e.nextReview instanceof Date && !isNaN(e.nextReview.getTime()) && e.nextReview <= now)
         .map(e => `${`${e.first || ''} ${e.last || ''}`.trim()} • ${fmtDate(e.nextReview)}`);
     setCardTitle('cardReviewsDue', dueReviews, 'No overdue reviews');
 

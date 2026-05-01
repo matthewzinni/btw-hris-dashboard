@@ -1,5 +1,35 @@
+{
+    "compilerOptions";
+    {
+        "target";
+        "ES2017",
+            "lib";
+        ["DOM", "ES2017"],
+            "strict";
+        false,
+            "noImplicitAny";
+        false,
+            "strictNullChecks";
+        false,
+            "esModuleInterop";
+        true,
+            "skipLibCheck";
+        true,
+            "allowJs";
+        false,
+            "noEmitOnError";
+        false,
+            "noEmit";
+        true,
+            "ignoreDeprecations";
+        "6.0";
+    }
+    "include";
+    ["js/**/*.ts"],
+        "exclude";
+    ["node_modules"];
+}
 window.addEventListener('DOMContentLoaded', () => {
-    var _a, _b, _c;
     const currentDateEl = safeGet('currentDate');
     if (currentDateEl) {
         currentDateEl.textContent = new Date().toLocaleDateString('en-US', {
@@ -28,9 +58,9 @@ window.addEventListener('DOMContentLoaded', () => {
             renderRoster();
         });
     });
-    (_a = safeGet('globalSearch')) === null || _a === void 0 ? void 0 : _a.addEventListener('input', renderRoster);
-    (_b = safeGet('deptFilter')) === null || _b === void 0 ? void 0 : _b.addEventListener('change', renderRoster);
-    (_c = safeGet('statusFilter')) === null || _c === void 0 ? void 0 : _c.addEventListener('change', renderRoster);
+    safeGet('globalSearch')?.addEventListener('input', renderRoster);
+    safeGet('deptFilter')?.addEventListener('change', renderRoster);
+    safeGet('statusFilter')?.addEventListener('change', renderRoster);
     if (typeof bindDrawerEvents === 'function') {
         bindDrawerEvents();
     }
@@ -243,11 +273,11 @@ async function updateEmployeeById(employeeId, payload) {
     if (!db) {
         return { data: null, error: new Error('Supabase client not available') };
     }
-    const targetId = String(employeeId || (payload === null || payload === void 0 ? void 0 : payload.id) || (payload === null || payload === void 0 ? void 0 : payload.employee_id) || (payload === null || payload === void 0 ? void 0 : payload.dbId) || '').trim();
+    const targetId = String(employeeId || payload?.id || payload?.employee_id || payload?.dbId || '').trim();
     if (!targetId) {
         return { data: null, error: new Error('No employee ID provided') };
     }
-    const cleanPayload = Object.assign({}, payload);
+    const cleanPayload = { ...payload };
     delete cleanPayload.dbId;
     delete cleanPayload.displayId;
     delete cleanPayload.displayName;
@@ -281,7 +311,6 @@ window.updateEmployeeById = updateEmployeeById;
 // FORM RESET / STATE MANAGEMENT
 // =========================
 function resetDrawerForms() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
     if (safeGet('noteDate'))
         safeGet('noteDate').value = todayInputValue();
     if (safeGet('noteType'))
@@ -398,16 +427,16 @@ function resetDrawerForms() {
         safeGet('saveMeetingBtn').textContent = 'Save Meeting';
     if (safeGet('saveReviewBtn'))
         safeGet('saveReviewBtn').textContent = 'Save Review';
-    (_a = safeGet('cancelDisciplineEditBtn')) === null || _a === void 0 ? void 0 : _a.classList.add('hidden');
-    (_b = safeGet('disciplineEditStatus')) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
-    (_c = safeGet('cancelIncidentEditBtn')) === null || _c === void 0 ? void 0 : _c.classList.add('hidden');
-    (_d = safeGet('incidentEditStatus')) === null || _d === void 0 ? void 0 : _d.classList.add('hidden');
-    (_e = safeGet('cancelStayInterviewEditBtn')) === null || _e === void 0 ? void 0 : _e.classList.add('hidden');
-    (_f = safeGet('stayInterviewEditStatus')) === null || _f === void 0 ? void 0 : _f.classList.add('hidden');
-    (_g = safeGet('cancelMeetingEditBtn')) === null || _g === void 0 ? void 0 : _g.classList.add('hidden');
-    (_h = safeGet('meetingEditStatus')) === null || _h === void 0 ? void 0 : _h.classList.add('hidden');
-    (_j = safeGet('cancelReviewEditBtn')) === null || _j === void 0 ? void 0 : _j.classList.add('hidden');
-    (_k = safeGet('reviewEditStatus')) === null || _k === void 0 ? void 0 : _k.classList.add('hidden');
+    safeGet('cancelDisciplineEditBtn')?.classList.add('hidden');
+    safeGet('disciplineEditStatus')?.classList.add('hidden');
+    safeGet('cancelIncidentEditBtn')?.classList.add('hidden');
+    safeGet('incidentEditStatus')?.classList.add('hidden');
+    safeGet('cancelStayInterviewEditBtn')?.classList.add('hidden');
+    safeGet('stayInterviewEditStatus')?.classList.add('hidden');
+    safeGet('cancelMeetingEditBtn')?.classList.add('hidden');
+    safeGet('meetingEditStatus')?.classList.add('hidden');
+    safeGet('cancelReviewEditBtn')?.classList.add('hidden');
+    safeGet('reviewEditStatus')?.classList.add('hidden');
 }
 function normalizeEmployee(employee) {
     if (!employee)
@@ -420,18 +449,42 @@ function normalizeEmployee(employee) {
     const nextReviewRaw = employee.next_review_date || employee.nextReviewDate || '';
     const hireDate = hireDateRaw ? new Date(`${hireDateRaw}T00:00:00`) : null;
     const nextReview = nextReviewRaw ? new Date(`${nextReviewRaw}T00:00:00`) : null;
-    return Object.assign(Object.assign({}, employee), { id: employee.id || employee.employee_id || '', dbId: employee.id || '', employee_id: employee.employee_id || employee.id || '', first,
-        last, first_name: first, last_name: last, displayName: `${first} ${last}`.trim(), dept, department: dept, position: employee.position || '', supervisor: employee.supervisor || '', status, displayStatus: status, payType: employee.payType || employee.pay_type || '', pay_type: employee.pay_type || employee.payType || '', hireDate, hire_date: hireDateRaw, nextReview, next_review_date: nextReviewRaw, tenureMonths: Number(employee.tenureMonths || employee.tenure_months || 0), tenure_months: Number(employee.tenure_months || employee.tenureMonths || 0), benefitsStatus: employee.benefitsStatus || employee.benefits_status || '', benefits_status: employee.benefits_status || employee.benefitsStatus || '' });
+    return {
+        ...employee,
+        id: employee.id || employee.employee_id || '',
+        dbId: employee.id || '',
+        employee_id: employee.employee_id || employee.id || '',
+        first,
+        last,
+        first_name: first,
+        last_name: last,
+        displayName: `${first} ${last}`.trim(),
+        dept,
+        department: dept,
+        position: employee.position || '',
+        supervisor: employee.supervisor || '',
+        status,
+        displayStatus: status,
+        payType: employee.payType || employee.pay_type || '',
+        pay_type: employee.pay_type || employee.payType || '',
+        hireDate,
+        hire_date: hireDateRaw,
+        nextReview,
+        next_review_date: nextReviewRaw,
+        tenureMonths: Number(employee.tenureMonths || employee.tenure_months || 0),
+        tenure_months: Number(employee.tenure_months || employee.tenureMonths || 0),
+        benefitsStatus: employee.benefitsStatus || employee.benefits_status || '',
+        benefits_status: employee.benefits_status || employee.benefitsStatus || ''
+    };
 }
 function populateEmployeeAdminForm(employee) {
-    var _a, _b;
     if (!employee)
         return;
     employee = normalizeEmployee(employee);
     if (!employee)
         return;
-    const drawerTitleName = String(((_a = safeGet('drawerTitle')) === null || _a === void 0 ? void 0 : _a.textContent) || '').trim();
-    const drawerSubParts = String(((_b = safeGet('drawerSub')) === null || _b === void 0 ? void 0 : _b.textContent) || '').split('•').map(part => part.trim());
+    const drawerTitleName = String(safeGet('drawerTitle')?.textContent || '').trim();
+    const drawerSubParts = String(safeGet('drawerSub')?.textContent || '').split('•').map(part => part.trim());
     const fallbackName = `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || drawerTitleName;
     const nameParts = String(fallbackName).trim().split(/\s+/).filter(Boolean);
     const values = {
@@ -458,7 +511,7 @@ function populateEmployeeAdminForm(employee) {
         const el = safeGet(id);
         if (!el)
             return;
-        el.value = value !== null && value !== void 0 ? value : '';
+        el.value = value ?? '';
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
     };
@@ -466,7 +519,7 @@ function populateEmployeeAdminForm(employee) {
         const el = document.querySelector(`input[placeholder="${placeholder}"], select[placeholder="${placeholder}"], textarea[placeholder="${placeholder}"]`);
         if (!el)
             return;
-        el.value = value !== null && value !== void 0 ? value : '';
+        el.value = value ?? '';
         el.dispatchEvent(new Event('input', { bubbles: true }));
         el.dispatchEvent(new Event('change', { bubbles: true }));
     };
@@ -523,9 +576,9 @@ function populateEmployeeAdminForm(employee) {
     const drawer = safeGet('employeeDrawer') || document.querySelector('#employeeDrawer');
     const statusSelect = safeGet('empStatus') ||
         safeGet('status') ||
-        (drawer === null || drawer === void 0 ? void 0 : drawer.querySelector('select#empStatus')) ||
-        (drawer === null || drawer === void 0 ? void 0 : drawer.querySelector('select#status')) ||
-        Array.from((drawer === null || drawer === void 0 ? void 0 : drawer.querySelectorAll('select')) || []).find(select => {
+        drawer?.querySelector('select#empStatus') ||
+        drawer?.querySelector('select#status') ||
+        Array.from(drawer?.querySelectorAll('select') || []).find(select => {
             return Array.from(select.options || []).some(option => {
                 const optionText = option.textContent.trim().toLowerCase();
                 return optionText === 'active' || optionText === 'inactive' || optionText === 'leave' || optionText === 'terminated';
@@ -561,7 +614,6 @@ function populateEmployeeAdminForm(employee) {
 // EDIT CANCEL HANDLERS
 // =========================
 function cancelStayInterviewEdit() {
-    var _a, _b;
     currentStayInterviewId = null;
     if (safeGet('stayInterviewDate'))
         safeGet('stayInterviewDate').value = todayInputValue();
@@ -585,8 +637,8 @@ function cancelStayInterviewEdit() {
         safeGet('stayManagerSummary').value = '';
     if (safeGet('saveStayInterviewBtn'))
         safeGet('saveStayInterviewBtn').textContent = 'Save Stay Interview';
-    (_a = safeGet('cancelStayInterviewEditBtn')) === null || _a === void 0 ? void 0 : _a.classList.add('hidden');
-    (_b = safeGet('stayInterviewEditStatus')) === null || _b === void 0 ? void 0 : _b.classList.add('hidden');
+    safeGet('cancelStayInterviewEditBtn')?.classList.add('hidden');
+    safeGet('stayInterviewEditStatus')?.classList.add('hidden');
 }
 function compareText(a, b) {
     return String(a || '').localeCompare(String(b || ''), undefined, { sensitivity: 'base' });
@@ -643,12 +695,12 @@ function isSupervisorUser() {
 function employeeMatchesSupervisorAccess(employee) {
     if (!isSupervisorUser())
         return true;
-    const supervisorName = String((currentUserAccess === null || currentUserAccess === void 0 ? void 0 : currentUserAccess.supervisor_name) || '').trim().toLowerCase();
+    const supervisorName = String(currentUserAccess?.supervisor_name || '').trim().toLowerCase();
     if (!supervisorName) {
         console.warn('[Supervisor Match Fail] No supervisor_name on currentUserAccess:', currentUserAccess);
         return false;
     }
-    const employeeSupervisor = String((employee === null || employee === void 0 ? void 0 : employee.supervisor) || (employee === null || employee === void 0 ? void 0 : employee.displaySupervisor) || '').trim().toLowerCase();
+    const employeeSupervisor = String(employee?.supervisor || employee?.displaySupervisor || '').trim().toLowerCase();
     if (!employeeSupervisor) {
         console.warn('[Supervisor Match Fail] No supervisor on employee:', employee);
         return false;
@@ -667,10 +719,9 @@ function employeeMatchesSupervisorAccess(employee) {
     return isMatch;
 }
 function applySupervisorDashboardView() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j;
     if (!isSupervisorUser())
         return;
-    const name = (currentUserAccess === null || currentUserAccess === void 0 ? void 0 : currentUserAccess.display_name) || (currentUserAccess === null || currentUserAccess === void 0 ? void 0 : currentUserAccess.supervisor_name) || 'Supervisor';
+    const name = currentUserAccess?.display_name || currentUserAccess?.supervisor_name || 'Supervisor';
     const title = safeGet('dashboardTitle') || document.querySelector('h1');
     if (title)
         title.textContent = `${name}'s Team Dashboard`;
@@ -678,20 +729,20 @@ function applySupervisorDashboardView() {
     if (rosterTitle)
         rosterTitle.textContent = 'My Team';
     // KPI LABEL UPDATES
-    const activeLabel = (_b = (_a = document.querySelector('#kActiveHC')) === null || _a === void 0 ? void 0 : _a.closest('.kpi-card')) === null || _b === void 0 ? void 0 : _b.querySelector('.kpi-label');
+    const activeLabel = document.querySelector('#kActiveHC')?.closest('.kpi-card')?.querySelector('.kpi-label');
     if (activeLabel)
         activeLabel.textContent = 'My Team Size';
-    const reviewsLabel = (_d = (_c = document.querySelector('#kReviewsDue')) === null || _c === void 0 ? void 0 : _c.closest('.kpi-card')) === null || _d === void 0 ? void 0 : _d.querySelector('.kpi-label');
+    const reviewsLabel = document.querySelector('#kReviewsDue')?.closest('.kpi-card')?.querySelector('.kpi-label');
     if (reviewsLabel)
         reviewsLabel.textContent = 'My Reviews Due';
-    const riskLabel = (_f = (_e = document.querySelector('#kTurnoverRisk')) === null || _e === void 0 ? void 0 : _e.closest('.kpi-card')) === null || _f === void 0 ? void 0 : _f.querySelector('.kpi-label');
+    const riskLabel = document.querySelector('#kTurnoverRisk')?.closest('.kpi-card')?.querySelector('.kpi-label');
     if (riskLabel)
         riskLabel.textContent = 'My Team Risk';
-    const leaveLabel = (_h = (_g = document.querySelector('#kOnLeave')) === null || _g === void 0 ? void 0 : _g.closest('.kpi-card')) === null || _h === void 0 ? void 0 : _h.querySelector('.kpi-label');
+    const leaveLabel = document.querySelector('#kOnLeave')?.closest('.kpi-card')?.querySelector('.kpi-label');
     if (leaveLabel)
         leaveLabel.textContent = 'My Team On Leave';
     // HIDE COMPANY-WIDE KPIs
-    const deptCard = (_j = document.querySelector('#kDepartments')) === null || _j === void 0 ? void 0 : _j.closest('.kpi-card');
+    const deptCard = document.querySelector('#kDepartments')?.closest('.kpi-card');
     if (deptCard)
         deptCard.classList.add('hidden');
     // ADMIN UI LOCK
@@ -711,7 +762,7 @@ function applySupervisorDashboardView() {
         banner.style.fontSize = '14px';
         const atRisk = (window.EMPLOYEES || []).filter(e => {
             const key = String(e.dbId || e.id || '');
-            const risk = currentAtRiskRosterMap === null || currentAtRiskRosterMap === void 0 ? void 0 : currentAtRiskRosterMap[key];
+            const risk = currentAtRiskRosterMap?.[key];
             return risk && (risk.lowReview || risk.openIncidentCount > 0 || risk.manualReason);
         }).length;
         banner.textContent = `You have ${EMPLOYEES.length} employees. ${atRisk} may need attention.`;
@@ -752,13 +803,13 @@ function buildEmployeeChangeLog(oldEmployee, newEmployee) {
         ['Phone', 'phone']
     ];
     const formatValue = value => {
-        const text = String(value !== null && value !== void 0 ? value : '').trim();
+        const text = String(value ?? '').trim();
         return text || 'Blank';
     };
     return fields
         .map(([label, key]) => {
-        const oldValue = formatValue(oldData === null || oldData === void 0 ? void 0 : oldData[key]);
-        const newValue = formatValue(newData === null || newData === void 0 ? void 0 : newData[key]);
+        const oldValue = formatValue(oldData?.[key]);
+        const newValue = formatValue(newData?.[key]);
         return oldValue !== newValue ? `${label}: ${oldValue} → ${newValue}` : '';
     })
         .filter(Boolean)
@@ -775,7 +826,7 @@ function recordAuditEvent(action, employee, details = '') {
         }
         const entry = {
             action,
-            employeeId: (employee === null || employee === void 0 ? void 0 : employee.id) || (employee === null || employee === void 0 ? void 0 : employee.dbId) || '',
+            employeeId: employee?.id || employee?.dbId || '',
             employeeName: employee ? `${employee.first || ''} ${employee.last || ''}`.trim() : '',
             details: cleanDetails,
             userRole: currentUserRole || 'user',
@@ -993,7 +1044,7 @@ async function loadAllDashboardData() {
 async function loadEmployees() {
     try {
         const { data: { user } } = await supabaseClient.auth.getUser();
-        const userEmail = String((user === null || user === void 0 ? void 0 : user.email) || '').trim().toLowerCase();
+        const userEmail = String(user?.email || '').trim().toLowerCase();
         if (userEmail) {
             const { data: accessRows, error: accessError } = await supabaseClient
                 .from('user_access')
@@ -1023,7 +1074,7 @@ async function loadEmployees() {
         .filter(Boolean);
     window.ALL_EMPLOYEES = normalizedEmployees;
     if (isSupervisorUser()) {
-        if (!(currentUserAccess === null || currentUserAccess === void 0 ? void 0 : currentUserAccess.supervisor_name)) {
+        if (!currentUserAccess?.supervisor_name) {
             showToast('No employee access assigned. Contact HR.', 'error');
             EMPLOYEES = [];
         }
@@ -1031,7 +1082,7 @@ async function loadEmployees() {
             EMPLOYEES = normalizedEmployees.filter(employeeMatchesSupervisorAccess);
         }
         console.log('[Supervisor Filter Applied]', {
-            supervisorName: currentUserAccess === null || currentUserAccess === void 0 ? void 0 : currentUserAccess.supervisor_name,
+            supervisorName: currentUserAccess?.supervisor_name,
             before: normalizedEmployees.length,
             after: EMPLOYEES.length,
             visible: EMPLOYEES.map(e => ({
@@ -1097,10 +1148,10 @@ async function loadCandidates() {
     }
 }
 function buildCandidateInterviewNotice(candidate) {
-    const status = String((candidate === null || candidate === void 0 ? void 0 : candidate.interview_status) || '').toLowerCase();
+    const status = String(candidate?.interview_status || '').toLowerCase();
     if (status === 'cancelled' || status === 'completed' || status === 'no show')
         return '';
-    if (!(candidate === null || candidate === void 0 ? void 0 : candidate.interview_date) || !(candidate === null || candidate === void 0 ? void 0 : candidate.interview_time))
+    if (!candidate?.interview_date || !candidate?.interview_time)
         return '';
     const interviewDateTime = new Date(`${candidate.interview_date}T${candidate.interview_time}`);
     const now = new Date();
@@ -1333,7 +1384,7 @@ async function toggleOnboardingTask(taskId, isComplete) {
         showToast('Could not update onboarding task.', 'error');
         return;
     }
-    const employeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.employee_id) || (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.id) || (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || '';
+    const employeeId = currentEmployee?.employee_id || currentEmployee?.id || currentEmployee?.dbId || '';
     await loadOnboardingTasks(employeeId);
 }
 window.loadOnboardingTasks = loadOnboardingTasks;
@@ -1398,7 +1449,7 @@ async function convertCandidateToEmployee(candidateId) {
     let error = null;
     const result = await supabaseClient
         .from('employees')
-        .insert([Object.assign(Object.assign({}, payload), { id: newEmployeeId })])
+        .insert([{ ...payload, id: newEmployeeId }])
         .select();
     data = result.data;
     error = result.error;
@@ -1473,8 +1524,7 @@ function switchCandidateTab(tabName) {
     });
 }
 function closeCandidateDrawer() {
-    var _a;
-    (_a = safeGet('drawerBackdrop')) === null || _a === void 0 ? void 0 : _a.classList.remove('open');
+    safeGet('drawerBackdrop')?.classList.remove('open');
     const drawer = safeGet('candidateDrawer');
     if (drawer) {
         drawer.classList.remove('open');
@@ -1588,23 +1638,22 @@ async function openCandidateDrawer(candidateId) {
     }
 }
 async function saveCandidateRecord() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r, _s, _t, _u, _v, _w, _x;
     const payload = {
-        first_name: ((_b = (_a = safeGet('candidateFirstNameInput')) === null || _a === void 0 ? void 0 : _a.value) === null || _b === void 0 ? void 0 : _b.trim()) || '',
-        last_name: ((_d = (_c = safeGet('candidateLastNameInput')) === null || _c === void 0 ? void 0 : _c.value) === null || _d === void 0 ? void 0 : _d.trim()) || '',
-        email: ((_f = (_e = safeGet('candidateEmailInput')) === null || _e === void 0 ? void 0 : _e.value) === null || _f === void 0 ? void 0 : _f.trim()) || '',
-        phone: ((_h = (_g = safeGet('candidatePhoneInput')) === null || _g === void 0 ? void 0 : _g.value) === null || _h === void 0 ? void 0 : _h.trim()) || '',
-        position: ((_k = (_j = safeGet('candidatePositionInput')) === null || _j === void 0 ? void 0 : _j.value) === null || _k === void 0 ? void 0 : _k.trim()) || '',
-        department: ((_m = (_l = safeGet('candidateDepartmentInput')) === null || _l === void 0 ? void 0 : _l.value) === null || _m === void 0 ? void 0 : _m.trim()) || '',
-        stage: ((_o = safeGet('candidateStageInput')) === null || _o === void 0 ? void 0 : _o.value) || 'Applied',
-        source: ((_q = (_p = safeGet('candidateSourceInput')) === null || _p === void 0 ? void 0 : _p.value) === null || _q === void 0 ? void 0 : _q.trim()) || '',
-        applied_date: ((_r = safeGet('candidateAppliedDateInput')) === null || _r === void 0 ? void 0 : _r.value) || null,
-        notes: ((_s = safeGet('candidateNotesInput')) === null || _s === void 0 ? void 0 : _s.value) || '',
-        interview_date: ((_t = safeGet('candidateInterviewDate')) === null || _t === void 0 ? void 0 : _t.value) || null,
-        interview_time: ((_u = safeGet('candidateInterviewTime')) === null || _u === void 0 ? void 0 : _u.value) || null,
-        interview_type: ((_v = safeGet('candidateInterviewType')) === null || _v === void 0 ? void 0 : _v.value) || '',
-        interview_status: ((_w = safeGet('candidateInterviewStatus')) === null || _w === void 0 ? void 0 : _w.value) || '',
-        interview_notes: ((_x = safeGet('candidateInterviewNotes')) === null || _x === void 0 ? void 0 : _x.value) || '',
+        first_name: safeGet('candidateFirstNameInput')?.value?.trim() || '',
+        last_name: safeGet('candidateLastNameInput')?.value?.trim() || '',
+        email: safeGet('candidateEmailInput')?.value?.trim() || '',
+        phone: safeGet('candidatePhoneInput')?.value?.trim() || '',
+        position: safeGet('candidatePositionInput')?.value?.trim() || '',
+        department: safeGet('candidateDepartmentInput')?.value?.trim() || '',
+        stage: safeGet('candidateStageInput')?.value || 'Applied',
+        source: safeGet('candidateSourceInput')?.value?.trim() || '',
+        applied_date: safeGet('candidateAppliedDateInput')?.value || null,
+        notes: safeGet('candidateNotesInput')?.value || '',
+        interview_date: safeGet('candidateInterviewDate')?.value || null,
+        interview_time: safeGet('candidateInterviewTime')?.value || null,
+        interview_type: safeGet('candidateInterviewType')?.value || '',
+        interview_status: safeGet('candidateInterviewStatus')?.value || '',
+        interview_notes: safeGet('candidateInterviewNotes')?.value || '',
     };
     if (!payload.first_name || !payload.last_name) {
         showToast('First and last name are required.', 'error');
@@ -1739,7 +1788,6 @@ function renderDepartmentSummary() {
       `).join('');
 }
 function renderKpiEmployeeMetrics() {
-    var _a;
     const active = EMPLOYEES.filter(e => e.status === 'ACTIVE');
     const reviewEligibleActive = active.filter(e => !String(e.payType || '').toLowerCase().includes('contract'));
     const departments = [...new Set(active.map(e => e.dept).filter(Boolean))];
@@ -1759,7 +1807,7 @@ function renderKpiEmployeeMetrics() {
         const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
         const isEarlyTenure = tenureMonths <= 6;
         const employeeKey = String(e.dbId || e.id || '');
-        const riskMeta = (currentAtRiskRosterMap === null || currentAtRiskRosterMap === void 0 ? void 0 : currentAtRiskRosterMap[employeeKey]) || null;
+        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
         const isAtRisk = !!riskMeta && (riskMeta.lowReview === true ||
             Number(riskMeta.openIncidentCount || 0) > 0 ||
             String(riskMeta.manualReason || '').trim() !== '');
@@ -1778,7 +1826,7 @@ function renderKpiEmployeeMetrics() {
         setText('kTurnoverRisk', turnoverRisk);
         setText('kTurnoverRiskSub', `${turnoverRiskContributors} at-risk employee${turnoverRiskContributors === 1 ? '' : 's'} in first 3 months`);
     }
-    const turnoverRiskCard = (_a = safeGet('kTurnoverRisk')) === null || _a === void 0 ? void 0 : _a.closest('.kpi-card');
+    const turnoverRiskCard = safeGet('kTurnoverRisk')?.closest('.kpi-card');
     if (turnoverRiskCard) {
         turnoverRiskCard.classList.remove('good', 'warn', 'alert');
         if (turnoverRisk >= 40)
@@ -1854,11 +1902,11 @@ async function loadSummaryMetrics() {
             if (disciplineCard) {
                 const openDisciplineNames = openDisciplineCases
                     .map(row => {
-                    const employee = (row === null || row === void 0 ? void 0 : row.employees) || null;
-                    const first = String((employee === null || employee === void 0 ? void 0 : employee.first_name) || '').trim();
-                    const last = String((employee === null || employee === void 0 ? void 0 : employee.last_name) || '').trim();
+                    const employee = row?.employees || null;
+                    const first = String(employee?.first_name || '').trim();
+                    const last = String(employee?.last_name || '').trim();
                     const fullName = `${first} ${last}`.trim();
-                    const issueType = String((row === null || row === void 0 ? void 0 : row.issue_type) || '').trim();
+                    const issueType = String(row?.issue_type || '').trim();
                     if (fullName && issueType)
                         return `${fullName} (${issueType})`;
                     if (fullName)
@@ -1933,7 +1981,12 @@ async function loadSummaryMetrics() {
             const latestManualRiskByEmployee = {};
             Object.keys(currentAtRiskRosterMap).forEach(key => {
                 const existing = currentAtRiskRosterMap[key];
-                currentAtRiskRosterMap[key] = Object.assign(Object.assign({}, existing), { lowReview: false, reviewScore: null, openIncidentCount: 0 });
+                currentAtRiskRosterMap[key] = {
+                    ...existing,
+                    lowReview: false,
+                    reviewScore: null,
+                    openIncidentCount: 0
+                };
             });
             (manualRiskRes.data || []).forEach(row => {
                 const employeeId = String(row.employee_id || '');
@@ -2011,7 +2064,11 @@ async function loadSummaryMetrics() {
             const latestImpactPlayerByEmployee = {};
             Object.keys(currentImpactPlayerRosterMap).forEach(key => {
                 const existing = currentImpactPlayerRosterMap[key];
-                currentImpactPlayerRosterMap[key] = Object.assign(Object.assign({}, existing), { highReview: false, reviewScore: null });
+                currentImpactPlayerRosterMap[key] = {
+                    ...existing,
+                    highReview: false,
+                    reviewScore: null
+                };
             });
             (impactPlayerRes.data || []).forEach(row => {
                 const employeeId = String(row.employee_id || '');
@@ -2052,8 +2109,8 @@ async function loadSummaryMetrics() {
         applyReviewImpactPlayers(latestReviewByEmployee);
         Object.keys(currentImpactPlayerRosterMap || {}).forEach(key => {
             const meta = currentImpactPlayerRosterMap[key];
-            const hasManualFlag = !!((meta === null || meta === void 0 ? void 0 : meta.manualReason) && String(meta.manualReason).trim() !== '');
-            const hasReviewFlag = (meta === null || meta === void 0 ? void 0 : meta.highReview) === true;
+            const hasManualFlag = !!(meta?.manualReason && String(meta.manualReason).trim() !== '');
+            const hasReviewFlag = meta?.highReview === true;
             if (!hasManualFlag && !hasReviewFlag) {
                 delete currentImpactPlayerRosterMap[key];
             }
@@ -2581,7 +2638,7 @@ function setManualAtRiskUi(flagged, reason = '') {
     }
 }
 async function loadEmployeeManualAtRisk(employeeId) {
-    const actualEmployeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || employeeId;
+    const actualEmployeeId = currentEmployee?.dbId || employeeId;
     if (!actualEmployeeId) {
         setManualAtRiskUi(false, '');
         return;
@@ -2598,7 +2655,7 @@ async function loadEmployeeManualAtRisk(employeeId) {
         setManualAtRiskUi(false, '');
         return;
     }
-    const latest = data === null || data === void 0 ? void 0 : data[0];
+    const latest = data?.[0];
     if (!latest || latest.note_type !== 'At-Risk Flag') {
         setManualAtRiskUi(false, '');
         return;
@@ -2606,12 +2663,11 @@ async function loadEmployeeManualAtRisk(employeeId) {
     setManualAtRiskUi(true, latest.note_text || '');
 }
 async function markEmployeeAtRisk() {
-    var _a;
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
     }
-    const reason = String(((_a = safeGet('atRiskReasonInput')) === null || _a === void 0 ? void 0 : _a.value) || '').trim();
+    const reason = String(safeGet('atRiskReasonInput')?.value || '').trim();
     if (!reason) {
         showToast('Enter a reason before marking the employee at-risk.', 'error');
         return;
@@ -2663,13 +2719,12 @@ async function markEmployeeAtRisk() {
     updateEmployeeRowBadges(currentEmployee.id);
 }
 async function clearAtRiskStatus() {
-    var _a;
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
     }
     const employeeDbId = currentEmployee.dbId || currentEmployee.id;
-    const noteText = String(((_a = safeGet('atRiskReasonInput')) === null || _a === void 0 ? void 0 : _a.value) || '').trim() || 'Manual at-risk flag cleared';
+    const noteText = String(safeGet('atRiskReasonInput')?.value || '').trim() || 'Manual at-risk flag cleared';
     const { error } = await supabaseClient
         .from('employee_notes')
         .insert([{
@@ -2717,7 +2772,7 @@ function setManualImpactPlayerUi(flagged, reason = '') {
     }
 }
 async function loadEmployeeManualImpactPlayer(employeeId) {
-    const actualEmployeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || employeeId;
+    const actualEmployeeId = currentEmployee?.dbId || employeeId;
     if (!actualEmployeeId) {
         setManualImpactPlayerUi(false, '');
         return;
@@ -2734,7 +2789,7 @@ async function loadEmployeeManualImpactPlayer(employeeId) {
         setManualImpactPlayerUi(false, '');
         return;
     }
-    const latest = data === null || data === void 0 ? void 0 : data[0];
+    const latest = data?.[0];
     if (!latest || latest.note_type !== 'Impact Player Flag') {
         setManualImpactPlayerUi(false, '');
         return;
@@ -2742,12 +2797,11 @@ async function loadEmployeeManualImpactPlayer(employeeId) {
     setManualImpactPlayerUi(true, latest.note_text || '');
 }
 async function markImpactPlayer() {
-    var _a;
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
     }
-    const reason = String(((_a = safeGet('impactPlayerReasonInput')) === null || _a === void 0 ? void 0 : _a.value) || '').trim();
+    const reason = String(safeGet('impactPlayerReasonInput')?.value || '').trim();
     if (!reason) {
         showToast('Enter a reason before marking the employee as an Impact Player.', 'error');
         return;
@@ -2796,13 +2850,12 @@ async function markImpactPlayer() {
     updateEmployeeRowBadges(currentEmployee.id);
 }
 async function clearImpactPlayerStatus() {
-    var _a;
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
     }
     const employeeDbId = currentEmployee.dbId || currentEmployee.id;
-    const noteText = String(((_a = safeGet('impactPlayerReasonInput')) === null || _a === void 0 ? void 0 : _a.value) || '').trim() || 'Manual Impact Player flag cleared';
+    const noteText = String(safeGet('impactPlayerReasonInput')?.value || '').trim() || 'Manual Impact Player flag cleared';
     const { error } = await supabaseClient
         .from('employee_notes')
         .insert([{
@@ -2838,7 +2891,6 @@ async function clearImpactPlayerStatus() {
     updateEmployeeRowBadges(currentEmployee.id);
 }
 function startNewEmployee() {
-    var _a, _b;
     resetDrawerForms();
     currentEmployee = null;
     isCreatingEmployee = true;
@@ -2875,29 +2927,28 @@ function startNewEmployee() {
         safeGet('onboardingSummary').textContent = '0 of 0 complete';
     if (safeGet('onboardingProgressBar'))
         safeGet('onboardingProgressBar').style.width = '0%';
-    (_a = safeGet('drawerBackdrop')) === null || _a === void 0 ? void 0 : _a.classList.add('open');
-    (_b = safeGet('employeeDrawer')) === null || _b === void 0 ? void 0 : _b.classList.add('open');
+    safeGet('drawerBackdrop')?.classList.add('open');
+    safeGet('employeeDrawer')?.classList.add('open');
     if (typeof loadEmployeeDocuments === 'function')
         currentEmployee = null;
     switchTab('employee');
 }
 async function saveEmployeeRecord() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p;
-    const id = ((_a = safeGet('employeeIdInput')) === null || _a === void 0 ? void 0 : _a.value.trim()) || '';
-    const first_name = ((_b = safeGet('employeeFirstNameInput')) === null || _b === void 0 ? void 0 : _b.value.trim()) || '';
-    const last_name = ((_c = safeGet('employeeLastNameInput')) === null || _c === void 0 ? void 0 : _c.value.trim()) || '';
-    const department = ((_d = safeGet('employeeDepartmentInput')) === null || _d === void 0 ? void 0 : _d.value.trim()) || '';
-    const position = ((_e = safeGet('employeePositionInput')) === null || _e === void 0 ? void 0 : _e.value.trim()) || '';
-    const supervisor = ((_f = safeGet('employeeSupervisorInput')) === null || _f === void 0 ? void 0 : _f.value.trim()) || '';
-    const status = ((_g = safeGet('employeeStatusInput')) === null || _g === void 0 ? void 0 : _g.value) || 'ACTIVE';
-    const pay_type = ((_h = safeGet('employeePayTypeInput')) === null || _h === void 0 ? void 0 : _h.value.trim()) || null;
-    const standard_hours_value = (_j = safeGet('employeeStandardHoursInput')) === null || _j === void 0 ? void 0 : _j.value;
+    const id = safeGet('employeeIdInput')?.value.trim() || '';
+    const first_name = safeGet('employeeFirstNameInput')?.value.trim() || '';
+    const last_name = safeGet('employeeLastNameInput')?.value.trim() || '';
+    const department = safeGet('employeeDepartmentInput')?.value.trim() || '';
+    const position = safeGet('employeePositionInput')?.value.trim() || '';
+    const supervisor = safeGet('employeeSupervisorInput')?.value.trim() || '';
+    const status = safeGet('employeeStatusInput')?.value || 'ACTIVE';
+    const pay_type = safeGet('employeePayTypeInput')?.value.trim() || null;
+    const standard_hours_value = safeGet('employeeStandardHoursInput')?.value;
     const standard_hours = standard_hours_value === '' ? null : Number(standard_hours_value);
-    const benefits_status = ((_k = safeGet('employeeBenefitsStatusInput')) === null || _k === void 0 ? void 0 : _k.value.trim()) || null;
-    const hire_date = ((_l = safeGet('employeeHireDateInput')) === null || _l === void 0 ? void 0 : _l.value) || null;
-    const next_review_date = ((_m = safeGet('employeeNextReviewInput')) === null || _m === void 0 ? void 0 : _m.value) || null;
-    const anniversary_date = ((_o = safeGet('employeeAnniversaryDateInput')) === null || _o === void 0 ? void 0 : _o.value) || null;
-    const tenure_bracket = ((_p = safeGet('employeeTenureBracketInput')) === null || _p === void 0 ? void 0 : _p.value.trim()) || null;
+    const benefits_status = safeGet('employeeBenefitsStatusInput')?.value.trim() || null;
+    const hire_date = safeGet('employeeHireDateInput')?.value || null;
+    const next_review_date = safeGet('employeeNextReviewInput')?.value || null;
+    const anniversary_date = safeGet('employeeAnniversaryDateInput')?.value || null;
+    const tenure_bracket = safeGet('employeeTenureBracketInput')?.value.trim() || null;
     if (!id || !first_name || !last_name) {
         showToast('Employee ID, first name, and last name are required.', 'error');
         return;
@@ -2978,7 +3029,6 @@ async function deleteEmployeeRecord() {
     await loadReviewDashboard();
 }
 function resetEmergencyContactForm() {
-    var _a;
     currentEmergencyContactId = null;
     if (safeGet('ecName'))
         safeGet('ecName').value = '';
@@ -2990,14 +3040,13 @@ function resetEmergencyContactForm() {
         safeGet('ecAltPhone').value = '';
     if (safeGet('ecNotes'))
         safeGet('ecNotes').value = '';
-    (_a = safeGet('deleteECBtn')) === null || _a === void 0 ? void 0 : _a.classList.add('hidden');
+    safeGet('deleteECBtn')?.classList.add('hidden');
 }
 async function loadEmergencyContacts(employeeId) {
-    var _a, _b;
     const target = safeGet('ecHistory');
     if (!target)
         return;
-    const resolvedEmployeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || employeeId;
+    const resolvedEmployeeId = currentEmployee?.dbId || employeeId;
     const { data, error } = await supabaseClient
         .from('emergency_contacts')
         .select('*')
@@ -3018,7 +3067,7 @@ async function loadEmergencyContacts(employeeId) {
             </div>
             <div class="empty">No emergency contacts on file</div>
         `;
-        (_a = safeGet('addEmergencyContactBtn')) === null || _a === void 0 ? void 0 : _a.addEventListener('click', () => {
+        safeGet('addEmergencyContactBtn')?.addEventListener('click', () => {
             resetEmergencyContactForm();
             applyRolePermissions();
         });
@@ -3050,18 +3099,17 @@ async function loadEmergencyContacts(employeeId) {
           </div>
         `).join('')}
       `;
-    (_b = safeGet('addEmergencyContactBtn')) === null || _b === void 0 ? void 0 : _b.addEventListener('click', () => {
+    safeGet('addEmergencyContactBtn')?.addEventListener('click', () => {
         resetEmergencyContactForm();
         applyRolePermissions();
     });
     target.querySelectorAll('[data-ec-id]').forEach(card => {
         card.addEventListener('click', () => {
-            var _a;
             const row = rows.find(item => String(item.id) === String(card.dataset.ecId));
             if (!row)
                 return;
             currentEmergencyContactId = row.id;
-            (_a = safeGet('deleteECBtn')) === null || _a === void 0 ? void 0 : _a.classList.remove('hidden');
+            safeGet('deleteECBtn')?.classList.remove('hidden');
             if (safeGet('ecName'))
                 safeGet('ecName').value = row.contact_name || '';
             if (safeGet('ecRelationship'))
@@ -3086,7 +3134,7 @@ async function deleteEmployeeDocument(docId) {
         .select('id, file_path, employee_id')
         .eq('id', docId);
     console.log('Fetched document row:', docRows, fetchError);
-    const docRow = docRows === null || docRows === void 0 ? void 0 : docRows[0];
+    const docRow = docRows?.[0];
     if (fetchError || !docRow) {
         console.error(fetchError);
         showToast('Could not find document record.', 'error');
@@ -3121,15 +3169,14 @@ async function deleteEmployeeDocument(docId) {
 // EMERGENCY CONTACT
 // =========================
 async function saveEmergencyContact() {
-    var _a, _b, _c, _d, _e;
     if (!currentEmployee)
         return;
     const resolvedEmployeeId = currentEmployee.dbId || currentEmployee.id;
-    const contact_name = ((_a = safeGet('ecName')) === null || _a === void 0 ? void 0 : _a.value.trim()) || '';
-    const relationship = ((_b = safeGet('ecRelationship')) === null || _b === void 0 ? void 0 : _b.value.trim()) || '';
-    const phone = ((_c = safeGet('ecPhone')) === null || _c === void 0 ? void 0 : _c.value.trim()) || '';
-    const alternate_phone = ((_d = safeGet('ecAltPhone')) === null || _d === void 0 ? void 0 : _d.value.trim()) || '';
-    const notes = ((_e = safeGet('ecNotes')) === null || _e === void 0 ? void 0 : _e.value.trim()) || '';
+    const contact_name = safeGet('ecName')?.value.trim() || '';
+    const relationship = safeGet('ecRelationship')?.value.trim() || '';
+    const phone = safeGet('ecPhone')?.value.trim() || '';
+    const alternate_phone = safeGet('ecAltPhone')?.value.trim() || '';
+    const notes = safeGet('ecNotes')?.value.trim() || '';
     if (!contact_name) {
         showToast('Enter the emergency contact name.', 'error');
         return;
@@ -3175,13 +3222,12 @@ async function saveEmergencyContact() {
 // DOCUMENTS
 // =========================
 async function uploadEmployeeDocument() {
-    var _a, _b, _c, _d;
     if (!currentEmployee) {
         showToast('Open an employee first.', 'error');
         return;
     }
-    const document_type = ((_a = safeGet('docType')) === null || _a === void 0 ? void 0 : _a.value) || '';
-    const file = (_c = (_b = safeGet('docFile')) === null || _b === void 0 ? void 0 : _b.files) === null || _c === void 0 ? void 0 : _c[0];
+    const document_type = safeGet('docType')?.value || '';
+    const file = safeGet('docFile')?.files?.[0];
     if (!document_type) {
         showToast('Select a document type.', 'error');
         return;
@@ -3210,7 +3256,7 @@ async function uploadEmployeeDocument() {
             file_name: file.name,
             file_path: filePath,
             file_ext: fileExt || null,
-            uploaded_by: ((_d = authData === null || authData === void 0 ? void 0 : authData.user) === null || _d === void 0 ? void 0 : _d.id) || null
+            uploaded_by: authData?.user?.id || null
         }]);
     if (insertError) {
         console.error(insertError);
@@ -3244,7 +3290,10 @@ async function loadEmployeeDocuments(employeeId) {
         const { data: signedData, error: signedError } = await supabaseClient.storage
             .from('employee-documents')
             .createSignedUrl(row.file_path, 3600);
-        return Object.assign(Object.assign({}, row), { signedUrl: signedError ? null : (signedData === null || signedData === void 0 ? void 0 : signedData.signedUrl) || null });
+        return {
+            ...row,
+            signedUrl: signedError ? null : signedData?.signedUrl || null
+        };
     }));
     target.innerHTML = docsWithUrls.map(row => `
   <div class="history-item">
@@ -3275,7 +3324,7 @@ async function loadEmployeeOnboarding(employeeId) {
         return;
     target.innerHTML = '<div class="empty">Loading onboarding...</div>';
     try {
-        const resolvedEmployeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.id) || employeeId;
+        const resolvedEmployeeId = currentEmployee?.id || employeeId;
         const { data, error } = await supabaseClient
             .from('onboarding_tasks')
             .select('id, task_name, task_type, section, status, due_date, completed_at')
@@ -3463,7 +3512,7 @@ async function deleteEmergencyContact() {
         return;
     }
     try {
-        const resolvedEmployeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.id) || null;
+        const resolvedEmployeeId = currentEmployee?.dbId || currentEmployee?.id || null;
         const deletingId = String(currentEmergencyContactId);
         const { error } = await supabaseClient
             .from('emergency_contacts')
@@ -3506,7 +3555,7 @@ async function loadStayInterviews(employeeId) {
     const { data, error } = await supabaseClient
         .from('stay_interviews')
         .select('*')
-        .eq('employee_id', String((currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || employeeId))
+        .eq('employee_id', String(currentEmployee?.dbId || employeeId))
         .order('interview_date', { ascending: false })
         .order('created_at', { ascending: false });
     if (error) {
@@ -3641,7 +3690,7 @@ async function editStayInterview(stayInterviewId) {
         .from('stay_interviews')
         .select('*')
         .eq('id', stayInterviewId);
-    const interview = data === null || data === void 0 ? void 0 : data[0];
+    const interview = data?.[0];
     if (error || !interview) {
         console.error(error);
         showToast('Could not load stay interview for editing', 'error');
@@ -3805,7 +3854,6 @@ function setCardTitle(id, lines, emptyText = 'No data available') {
     el.setAttribute('data-tooltip', text);
 }
 function buildKpiHoverDetails() {
-    var _a, _b;
     const activeEmployees = EMPLOYEES.filter(e => String(e.status || '').toUpperCase() === 'ACTIVE');
     const leaveEmployees = EMPLOYEES.filter(e => String(e.status || '').toUpperCase() === 'LEAVE');
     setCardTitle('cardActiveHC', activeEmployees.map(e => `${e.first || ''} ${e.last || ''}`.trim()), 'No active employees');
@@ -3821,7 +3869,7 @@ function buildKpiHoverDetails() {
         const tenureMonths = Number(e.tenureMonths || 0);
         const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
         const employeeKey = String(e.dbId || e.id || '');
-        const riskMeta = (currentAtRiskRosterMap === null || currentAtRiskRosterMap === void 0 ? void 0 : currentAtRiskRosterMap[employeeKey]) || null;
+        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
         const isAtRisk = !!riskMeta && (riskMeta.lowReview === true ||
             Number(riskMeta.openIncidentCount || 0) > 0 ||
             String(riskMeta.manualReason || '').trim() !== '');
@@ -3838,12 +3886,12 @@ function buildKpiHoverDetails() {
             employee.employee_id,
             employee.displayId
         ].filter(Boolean).map(String);
-        return keys.some(key => { var _a; return (currentAtRiskRosterMap === null || currentAtRiskRosterMap === void 0 ? void 0 : currentAtRiskRosterMap[key]) || ((_a = window.currentAtRiskRosterMap) === null || _a === void 0 ? void 0 : _a[key]); });
+        return keys.some(key => currentAtRiskRosterMap?.[key] || window.currentAtRiskRosterMap?.[key]);
     })
         .map(employee => `${employee.first || ''} ${employee.last || ''}`.trim())
         .filter(Boolean)
         .sort(compareText);
-    const atRiskCount = Number(String(((_a = safeGet('kRisk')) === null || _a === void 0 ? void 0 : _a.textContent) || '0').trim()) || 0;
+    const atRiskCount = Number(String(safeGet('kRisk')?.textContent || '0').trim()) || 0;
     setCardTitle('cardAtRiskEmployees', atRiskNames.length ? atRiskNames : (atRiskCount > 0 ? [`${atRiskCount} employee flagged`] : []), 'No employees currently flagged');
     const impactPlayerNames = currentFilteredEmployees
         .filter(e => currentImpactPlayerRosterMap[String(e.dbId)] || currentImpactPlayerRosterMap[String(e.id)])
@@ -3853,8 +3901,8 @@ function buildKpiHoverDetails() {
     setCardTitle('cardImpactPlayers', impactPlayerNames, 'No impact players');
     setCardTitle('cardOnLeave', leaveEmployees.map(e => `${e.first || ''} ${e.last || ''}`.trim()), 'No employees currently on leave');
     const disciplineCard = safeGet('cardOpenDiscipline');
-    const existingDisciplineTooltip = (disciplineCard === null || disciplineCard === void 0 ? void 0 : disciplineCard.getAttribute('data-tooltip')) || '';
-    const disciplineCountText = String(((_b = safeGet('kOpenDiscipline')) === null || _b === void 0 ? void 0 : _b.textContent) || '').trim();
+    const existingDisciplineTooltip = disciplineCard?.getAttribute('data-tooltip') || '';
+    const disciplineCountText = String(safeGet('kOpenDiscipline')?.textContent || '').trim();
     const hasRealDisciplineTooltip = existingDisciplineTooltip
         && existingDisciplineTooltip !== 'No open discipline cases'
         && existingDisciplineTooltip !== 'No discipline cases open'
@@ -3884,26 +3932,25 @@ window.clearImpactPlayerStatus = clearImpactPlayerStatus;
 // SAVE REVIEW HANDLER
 // =========================
 async function saveReviewRecord() {
-    var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m, _o, _p, _q, _r;
     // Read review form fields
-    const reviewDate = ((_a = safeGet('reviewDate')) === null || _a === void 0 ? void 0 : _a.value) || '';
-    const reviewType = ((_b = safeGet('reviewType')) === null || _b === void 0 ? void 0 : _b.value) || '';
-    const reviewQuality = ((_c = safeGet('reviewQuality')) === null || _c === void 0 ? void 0 : _c.value) || '';
-    const reviewAttendance = ((_d = safeGet('reviewAttendance')) === null || _d === void 0 ? void 0 : _d.value) || '';
-    const reviewReliability = ((_e = safeGet('reviewReliability')) === null || _e === void 0 ? void 0 : _e.value) || '';
-    const reviewCommunication = ((_f = safeGet('reviewCommunication')) === null || _f === void 0 ? void 0 : _f.value) || '';
-    const reviewJudgement = ((_g = safeGet('reviewJudgement')) === null || _g === void 0 ? void 0 : _g.value) || '';
-    const reviewInitiative = ((_h = safeGet('reviewInitiative')) === null || _h === void 0 ? void 0 : _h.value) || '';
-    const reviewTeamwork = ((_j = safeGet('reviewTeamwork')) === null || _j === void 0 ? void 0 : _j.value) || '';
-    const reviewKnowledge = ((_k = safeGet('reviewKnowledge')) === null || _k === void 0 ? void 0 : _k.value) || '';
-    const reviewTraining = ((_l = safeGet('reviewTraining')) === null || _l === void 0 ? void 0 : _l.value) || '';
-    const reviewOverallResult = ((_m = safeGet('reviewOverallResult')) === null || _m === void 0 ? void 0 : _m.value) || '';
-    const reviewStrengths = ((_o = safeGet('reviewStrengths')) === null || _o === void 0 ? void 0 : _o.value) || '';
-    const reviewImprovements = ((_p = safeGet('reviewImprovements')) === null || _p === void 0 ? void 0 : _p.value) || '';
-    const reviewEmployeeComments = ((_q = safeGet('reviewEmployeeComments')) === null || _q === void 0 ? void 0 : _q.value) || '';
-    const reviewManagerComments = ((_r = safeGet('reviewManagerComments')) === null || _r === void 0 ? void 0 : _r.value) || '';
+    const reviewDate = safeGet('reviewDate')?.value || '';
+    const reviewType = safeGet('reviewType')?.value || '';
+    const reviewQuality = safeGet('reviewQuality')?.value || '';
+    const reviewAttendance = safeGet('reviewAttendance')?.value || '';
+    const reviewReliability = safeGet('reviewReliability')?.value || '';
+    const reviewCommunication = safeGet('reviewCommunication')?.value || '';
+    const reviewJudgement = safeGet('reviewJudgement')?.value || '';
+    const reviewInitiative = safeGet('reviewInitiative')?.value || '';
+    const reviewTeamwork = safeGet('reviewTeamwork')?.value || '';
+    const reviewKnowledge = safeGet('reviewKnowledge')?.value || '';
+    const reviewTraining = safeGet('reviewTraining')?.value || '';
+    const reviewOverallResult = safeGet('reviewOverallResult')?.value || '';
+    const reviewStrengths = safeGet('reviewStrengths')?.value || '';
+    const reviewImprovements = safeGet('reviewImprovements')?.value || '';
+    const reviewEmployeeComments = safeGet('reviewEmployeeComments')?.value || '';
+    const reviewManagerComments = safeGet('reviewManagerComments')?.value || '';
     // Determine employee ID
-    const employeeId = (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.dbId) || (currentEmployee === null || currentEmployee === void 0 ? void 0 : currentEmployee.id);
+    const employeeId = currentEmployee?.dbId || currentEmployee?.id;
     if (!employeeId) {
         showToast('No employee selected for review.', 'error');
         return;
