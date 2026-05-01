@@ -25,6 +25,14 @@ declare function closeDrawer(): void;
 declare function initializeAuth(): void;
 declare function renderEmployeeRoster(): void;
 
+const OrbisState = {
+
+    atRiskMap: {} as Record<string, RosterRiskMeta>,
+
+    impactPlayerMap: {} as Record<string, RosterRiskMeta>
+
+};
+
 
 type Employee = {
 
@@ -170,13 +178,10 @@ let currentSort: { column: string; direction: 'asc' | 'desc' } = {
 let currentUserRole: UserRole = 'user';
 let currentUserAccess: UserAccess | null = null;
 let currentManualAtRiskState: ManualFlagState = { flagged: false, reason: '' };
-let currentAtRiskRosterMap: Record<string, RosterRiskMeta> = {};
 let currentManualImpactPlayerState: ManualFlagState = { flagged: false, reason: '' };
-let currentImpactPlayerRosterMap: Record<string, RosterRiskMeta> = {};
 
-// Shared helper, formatting, toast, and print functions now live in:
-// js/utils/helpers.js
-
+(window as any).OrbisState.atRiskMap = OrbisState.atRiskMap;
+(window as any).OrbisState.impactPlayerMap = OrbisState.impactPlayerMap;
 
 // =========================
 // UI / NAVIGATION
@@ -909,7 +914,7 @@ function applySupervisorDashboardView(): void {
 
         const atRisk = (window.EMPLOYEES || []).filter(e => {
             const key = String(e.dbId || e.id || '');
-            const risk = currentAtRiskRosterMap?.[key];
+            const risk = OrbisState.atRiskMap?.[key];
             return risk && (risk.lowReview || risk.openIncidentCount > 0 || risk.manualReason);
         }).length;
 
@@ -2197,7 +2202,7 @@ function renderKpiEmployeeMetrics(): void {
         const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
         const isEarlyTenure = tenureMonths <= 6;
         const employeeKey = String(e.dbId || e.id || '');
-        const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
+        const riskMeta = OrbisState.atRiskMap?.[employeeKey] || null;
         const isAtRisk = !!riskMeta && (
             riskMeta.lowReview === true ||
             Number(riskMeta.openIncidentCount || 0) > 0 ||
@@ -2258,8 +2263,8 @@ function renderKpiEmployeeMetrics(): void {
 function applyReviewImpactPlayers(latestReviewByEmployee: Record<string, any>): void {
     Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
         if (item.avgScore !== null && item.avgScore >= 4) {
-            if (!currentImpactPlayerRosterMap[employeeId]) {
-                currentImpactPlayerRosterMap[employeeId] = {
+            if (!OrbisState.impactPlayerMap[employeeId]) {
+                OrbisState.impactPlayerMap[employeeId] = {
                     manualReason: '',
                     flaggedDate: '',
                     flaggedBy: '',
@@ -2268,8 +2273,8 @@ function applyReviewImpactPlayers(latestReviewByEmployee: Record<string, any>): 
                 };
             }
 
-            currentImpactPlayerRosterMap[employeeId].highReview = true;
-            currentImpactPlayerRosterMap[employeeId].reviewScore = item.avgScore;
+            OrbisState.impactPlayerMap[employeeId].highReview = true;
+            OrbisState.impactPlayerMap[employeeId].reviewScore = item.avgScore;
         }
     });
 }
@@ -2392,9 +2397,9 @@ async function loadSummaryMetrics(): Promise<void> {
 
         if (!manualRiskRes.error) {
             const latestManualRiskByEmployee = {};
-            Object.keys(currentAtRiskRosterMap).forEach(key => {
-                const existing = currentAtRiskRosterMap[key];
-                currentAtRiskRosterMap[key] = {
+            Object.keys(OrbisState.atRiskMap).forEach(key => {
+                const existing = OrbisState.atRiskMap[key];
+                OrbisState.atRiskMap[key] = {
                     ...existing,
                     lowReview: false,
                     reviewScore: null,
@@ -2416,8 +2421,8 @@ async function loadSummaryMetrics(): Promise<void> {
             });
 
             Object.entries(latestManualRiskByEmployee).forEach(([employeeId, row]: [string, any]) => {
-                if (!currentAtRiskRosterMap[String(employeeId)]) {
-                    currentAtRiskRosterMap[String(employeeId)] = {
+                if (!OrbisState.atRiskMap[String(employeeId)]) {
+                    OrbisState.atRiskMap[String(employeeId)] = {
                         manualReason: '',
                         lowReview: false,
                         reviewScore: null,
@@ -2428,15 +2433,15 @@ async function loadSummaryMetrics(): Promise<void> {
                 }
 
                 if (String(row.note_type || '') === 'At-Risk Flag') {
-                    currentAtRiskRosterMap[String(employeeId)].manualReason = String(row.note_text || '').trim();
-                    currentAtRiskRosterMap[String(employeeId)].flaggedDate = String(row.note_date || '').trim();
-                    currentAtRiskRosterMap[String(employeeId)].flaggedBy = 'Matthew Zinni';
+                    OrbisState.atRiskMap[String(employeeId)].manualReason = String(row.note_text || '').trim();
+                    OrbisState.atRiskMap[String(employeeId)].flaggedDate = String(row.note_date || '').trim();
+                    OrbisState.atRiskMap[String(employeeId)].flaggedBy = 'Matthew Zinni';
                 }
             });
             Object.entries(latestReviewByEmployee).forEach(([employeeId, item]: [string, any]) => {
                 if (item.avgScore !== null && item.avgScore <= 3) {
-                    if (!currentAtRiskRosterMap[String(employeeId)]) {
-                        currentAtRiskRosterMap[String(employeeId)] = {
+                    if (!OrbisState.atRiskMap[String(employeeId)]) {
+                        OrbisState.atRiskMap[String(employeeId)] = {
                             manualReason: '',
                             lowReview: false,
                             reviewScore: null,
@@ -2445,14 +2450,14 @@ async function loadSummaryMetrics(): Promise<void> {
                             flaggedBy: ''
                         };
                     }
-                    currentAtRiskRosterMap[String(employeeId)].lowReview = true;
-                    currentAtRiskRosterMap[String(employeeId)].reviewScore = item.avgScore;
+                    OrbisState.atRiskMap[String(employeeId)].lowReview = true;
+                    OrbisState.atRiskMap[String(employeeId)].reviewScore = item.avgScore;
                 }
             });
 
             incidentRiskEmployeeIds.forEach(employeeId => {
-                if (!currentAtRiskRosterMap[String(employeeId)]) {
-                    currentAtRiskRosterMap[String(employeeId)] = {
+                if (!OrbisState.atRiskMap[String(employeeId)]) {
+                    OrbisState.atRiskMap[String(employeeId)] = {
                         manualReason: '',
                         lowReview: false,
                         reviewScore: null,
@@ -2462,8 +2467,8 @@ async function loadSummaryMetrics(): Promise<void> {
                     };
                 }
 
-                currentAtRiskRosterMap[String(employeeId)].openIncidentCount =
-                    (currentAtRiskRosterMap[String(employeeId)].openIncidentCount || 0) + 1;
+                OrbisState.atRiskMap[String(employeeId)].openIncidentCount =
+                    (OrbisState.atRiskMap[String(employeeId)].openIncidentCount || 0) + 1;
             });
             // Refresh roster so new manual At-Risk badge appears
             if (Array.isArray(EMPLOYEES) && EMPLOYEES.length) {
@@ -2480,9 +2485,9 @@ async function loadSummaryMetrics(): Promise<void> {
 
         if (!impactPlayerRes.error) {
             const latestImpactPlayerByEmployee = {};
-            Object.keys(currentImpactPlayerRosterMap).forEach(key => {
-                const existing = currentImpactPlayerRosterMap[key];
-                currentImpactPlayerRosterMap[key] = {
+            Object.keys(OrbisState.impactPlayerMap).forEach(key => {
+                const existing = OrbisState.impactPlayerMap[key];
+                OrbisState.impactPlayerMap[key] = {
                     ...existing,
                     highReview: false,
                     reviewScore: null
@@ -2500,7 +2505,7 @@ async function loadSummaryMetrics(): Promise<void> {
             Object.entries(latestImpactPlayerByEmployee).forEach(([employeeId, row]: [string, any]) => {
                 if (String(row.note_type || '') === 'Impact Player Flag') {
                     impactPlayerEmployeeIds.add(employeeId);
-                    currentImpactPlayerRosterMap[employeeId] = {
+                    OrbisState.impactPlayerMap[employeeId] = {
                         manualReason: String(row.note_text || '').trim(),
                         flaggedDate: String(row.note_date || '').trim(),
                         flaggedBy: 'Matthew Zinni',
@@ -2527,13 +2532,13 @@ async function loadSummaryMetrics(): Promise<void> {
         });
         applyReviewImpactPlayers(latestReviewByEmployee);
 
-        Object.keys(currentImpactPlayerRosterMap || {}).forEach(key => {
-            const meta = currentImpactPlayerRosterMap[key];
+        Object.keys(OrbisState.impactPlayerMap || {}).forEach(key => {
+            const meta = OrbisState.impactPlayerMap[key];
             const hasManualFlag = !!(meta?.manualReason && String(meta.manualReason).trim() !== '');
             const hasReviewFlag = meta?.highReview === true;
 
             if (!hasManualFlag && !hasReviewFlag) {
-                delete currentImpactPlayerRosterMap[key];
+                delete OrbisState.impactPlayerMap[key];
             }
         });
 
@@ -2544,7 +2549,7 @@ async function loadSummaryMetrics(): Promise<void> {
         ]);
 
         const atRiskEmployees = combinedRiskEmployeeIds.size;
-        const impactPlayers = Object.values(currentImpactPlayerRosterMap || {}).filter(meta =>
+        const impactPlayers = Object.values(OrbisState.impactPlayerMap || {}).filter((meta: any) =>
             meta && (
                 meta.highReview === true ||
                 (meta.manualReason && meta.manualReason.trim() !== '')
@@ -3239,11 +3244,12 @@ async function markEmployeeAtRisk() {
         currentEmployee.displayId
     ].filter(Boolean).map(String);
 
-    window.currentAtRiskRosterMap = window.currentAtRiskRosterMap || currentAtRiskRosterMap || {};
+    (window as any).currentAtRiskRosterMap = (window as any).currentAtRiskRosterMap || OrbisState.atRiskMap || {};
+    OrbisState.atRiskMap = (window as any).currentAtRiskRosterMap;
 
     riskKeys.forEach(key => {
-        currentAtRiskRosterMap[key] = riskMeta;
-        window.currentAtRiskRosterMap[key] = riskMeta;
+        OrbisState.atRiskMap[key] = riskMeta;
+        (window as any).currentAtRiskRosterMap[key] = riskMeta;
     });
 
     if (typeof loadEmployeeNotes === 'function') await loadEmployeeNotes(currentEmployee.id);
@@ -3307,11 +3313,12 @@ async function clearAtRiskStatus() {
         currentEmployee.displayId
     ].filter(Boolean).map(String);
 
-    window.currentAtRiskRosterMap = window.currentAtRiskRosterMap || currentAtRiskRosterMap || {};
+    (window as any).currentAtRiskRosterMap = (window as any).currentAtRiskRosterMap || OrbisState.atRiskMap || {};
+    OrbisState.atRiskMap = (window as any).currentAtRiskRosterMap;
 
     riskKeys.forEach(key => {
-        delete currentAtRiskRosterMap[key];
-        delete window.currentAtRiskRosterMap[key];
+        delete OrbisState.atRiskMap[key];
+        delete (window as any).currentAtRiskRosterMap[key];
     });
 
     if (typeof loadEmployeeNotes === 'function') await loadEmployeeNotes(currentEmployee.id);
@@ -3412,11 +3419,12 @@ async function markImpactPlayer() {
         currentEmployee.displayId
     ].filter(Boolean).map(String);
 
-    window.currentImpactPlayerRosterMap = window.currentImpactPlayerRosterMap || currentImpactPlayerRosterMap || {};
+    (window as any).currentImpactPlayerRosterMap = (window as any).currentImpactPlayerRosterMap || OrbisState.impactPlayerMap || {};
+    OrbisState.impactPlayerMap = (window as any).currentImpactPlayerRosterMap;
 
     impactKeys.forEach(key => {
-        currentImpactPlayerRosterMap[key] = impactMeta;
-        window.currentImpactPlayerRosterMap[key] = impactMeta;
+        OrbisState.impactPlayerMap[key] = impactMeta;
+        (window as any).currentImpactPlayerRosterMap[key] = impactMeta;
     });
 
     if (typeof loadEmployeeNotes === 'function') await loadEmployeeNotes(currentEmployee.id);
@@ -3459,11 +3467,12 @@ async function clearImpactPlayerStatus() {
         currentEmployee.displayId
     ].filter(Boolean).map(String);
 
-    window.currentImpactPlayerRosterMap = window.currentImpactPlayerRosterMap || currentImpactPlayerRosterMap || {};
+    (window as any).currentImpactPlayerRosterMap = (window as any).currentImpactPlayerRosterMap || OrbisState.impactPlayerMap || {};
+    OrbisState.impactPlayerMap = (window as any).currentImpactPlayerRosterMap;
 
     impactKeys.forEach(key => {
-        delete currentImpactPlayerRosterMap[key];
-        delete window.currentImpactPlayerRosterMap[key];
+        delete OrbisState.impactPlayerMap[key];
+        delete (window as any).currentImpactPlayerRosterMap[key];
     });
 
     if (typeof loadEmployeeNotes === 'function') await loadEmployeeNotes(currentEmployee.id);
@@ -4474,8 +4483,8 @@ async function loadImpactPlayers() {
             ? EMPLOYEES.filter(e => e.status === 'ACTIVE' && !String(e.payType || '').toLowerCase().includes('contract'))
             : [];
 
-        const impactPlayers = Object.entries(currentImpactPlayerRosterMap || {})
-            .map(([employeeKey, impactMeta]) => {
+        const impactPlayers = Object.entries(OrbisState.impactPlayerMap || {})
+            .map(([employeeKey, impactMeta]: [string, any]) => {
                 const emp = employeeList.find(e =>
                     String(e.dbId) === String(employeeKey) ||
                     String(e.id) === String(employeeKey)
@@ -4483,7 +4492,7 @@ async function loadImpactPlayers() {
                 if (!emp || !impactMeta) return null;
                 return { emp, impactMeta };
             })
-            .filter(Boolean)
+            .filter((item): item is { emp: any; impactMeta: any } => Boolean(item))
             .sort((a, b) => compareText(
                 `${a.emp.first || ''} ${a.emp.last || ''}`.trim(),
                 `${b.emp.first || ''} ${b.emp.last || ''}`.trim()
@@ -4495,7 +4504,7 @@ async function loadImpactPlayers() {
             return;
         }
 
-        target.innerHTML = impactPlayers.map(({ emp, impactMeta }) => {
+        target.innerHTML = impactPlayers.map(({ emp, impactMeta }: { emp: any; impactMeta: any }) => {
             const metaParts = [];
             if (emp.dept) metaParts.push(emp.dept);
             if (impactMeta.highReview && impactMeta.reviewScore !== null && impactMeta.reviewScore !== undefined) {
@@ -4523,7 +4532,7 @@ async function loadImpactPlayers() {
     `;
         }).join('');
 
-        target.querySelectorAll('[data-id]').forEach(el => {
+        target.querySelectorAll('[data-id]').forEach((el: any) => {
             el.onclick = () => {
                 const emp = EMPLOYEES.find(e => String(e.id) === String(el.dataset.id));
                 if (emp) openDrawer(emp);
@@ -4593,7 +4602,7 @@ function buildKpiHoverDetails() {
             const tenureMonths = Number(e.tenureMonths || 0);
             const isFirstThreeMonths = tenureMonths > 0 && tenureMonths <= 3;
             const employeeKey = String(e.dbId || e.id || '');
-            const riskMeta = currentAtRiskRosterMap?.[employeeKey] || null;
+            const riskMeta = OrbisState.atRiskMap?.[employeeKey] || null;
             const isAtRisk = !!riskMeta && (
                 riskMeta.lowReview === true ||
                 Number(riskMeta.openIncidentCount || 0) > 0 ||
@@ -4615,7 +4624,7 @@ function buildKpiHoverDetails() {
                 employee.displayId
             ].filter(Boolean).map(String);
 
-            return keys.some(key => currentAtRiskRosterMap?.[key] || window.currentAtRiskRosterMap?.[key]);
+            return keys.some(key => OrbisState.atRiskMap?.[key] || window.currentAtRiskRosterMap?.[key]);
         })
         .map(employee => `${employee.first || ''} ${employee.last || ''}`.trim())
         .filter(Boolean)
@@ -4630,7 +4639,7 @@ function buildKpiHoverDetails() {
     );
 
     const impactPlayerNames = currentFilteredEmployees
-        .filter(e => currentImpactPlayerRosterMap[String(e.dbId)] || currentImpactPlayerRosterMap[String(e.id)])
+        .filter(e => OrbisState.impactPlayerMap[String(e.dbId)] || OrbisState.impactPlayerMap[String(e.id)])
         .map(e => `${e.first || ''} ${e.last || ''}`.trim())
         .filter(Boolean)
         .sort(compareText);
@@ -4881,6 +4890,9 @@ declare global {
         EMPLOYEES?: any[];
         ALL_EMPLOYEES?: any[];
         currentAtRiskRosterMap?: Record<string, any>;
+
+        currentImpactPlayerRosterMap?: Record<string, any>;
+
         [key: string]: any;
     }
 }
